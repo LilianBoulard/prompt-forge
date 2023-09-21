@@ -1,155 +1,607 @@
 from __future__ import annotations
 
+import json
 import random
-
-from typing import Sequence
+import re
+import tomllib
 from argparse import ArgumentParser
+from itertools import product
 from pathlib import Path
+from typing import Literal
+
+import jsonschema
+from loguru import logger
+
+
+def is_balanced(parens: str) -> bool:
+    # From: https://stackoverflow.com/a/73341167/
+    parens_map ={"(":")","{":"}","[":"]"}
+    stack = []
+    for paren in parens:
+        if paren in parens_map:  # is open
+            stack.append(paren)
+        elif paren in parens_map.values():  # is closed
+            if (not stack) or (paren != parens_map[stack.pop()]):
+                return False
+    return not stack
+
+
+def build_candidate_tree(candidate_part: list | str) -> Candidate:
+    if isinstance(candidate_part, list):
+        node = Candidate()  # Create dummy
+        # Add children
+        for item in candidate_part:
+            node.children.append(build_candidate_tree(item))
+    else:
+        # Create leaf
+        node = Candidate(candidate_part)
+    return node
+
+
+def flatten_groups(elements: list[Block | Group | ExclusionGroup]) -> set[Block]:
+    """
+    Given a list of elements, flattens it all to get the blocks constitutive
+    of that set.
+
+    Parameters
+    ----------
+    elements: list of Block, Group or ExclusionGroup
+        Mixed list containing the elements to flatten.
+
+    Returns
+    -------
+    set of Block
+        The elements, flattened to only the blocks they contain.
+    """
+    blocks = []
+    members_queue = elements.copy()
+    while members_queue:
+        member = members_queue.pop()
+        if isinstance(member, Block):
+            blocks.append(member)
+        elif isinstance(member, (Group, ExclusionGroup)):
+            members_queue.extend(member.members)
+    return set(blocks)
+
+
+def groups_in_group(group: Group | ExclusionGroup) -> list[Group | ExclusionGroup]:
+    groups = []
+    members_queue = group.members.copy()
+    while members_queue:
+        member = members_queue.pop()
+        if isinstance(member, Block):
+            continue
+        elif isinstance(member, (Group, ExclusionGroup)):
+            groups.append(member)
+            members_queue.extend(member.members)
+    return set(groups)
+
+
+class Candidate:
+
+    """
+    A candidate node (used in a tree) either has a value
+    (it's a leaf) or a list of children (it's a dummy).
+    """
+
+    def __init__(self, keyword: str | None = None):
+        self.value = keyword
+        self.children: list[Candidate] = []
+    
+    def __repr__(self) -> list:
+        if self.value is not None:
+            return str(self.value)
+        return f"{[repr(child) for child in self.children]}"
+
+    def expand(self) -> str | list[str]:
+        """
+        Expands the tree to enumerate all keywords.
+
+        Returns
+        -------
+        str
+            If the candidate is a leaf, returns its value.
+        list[str]
+            The list of all keywords.
+        """
+        if (
+            (self.value is not None and self.children)
+            or (self.value is None and not self.children)
+        ):
+            logger.error(
+                "Candidate must either be a leaf "
+                "(have a value) or a dummy (has children). " 
+                f"Has both: {self.value=}, {self.children=}"
+            )
+
+        # If it's a leaf, return its value
+        if self.value is not None:
+            return self.value
+
+        # First pass: we append everything to a single list.
+        # e.g. ["a", "b", ["c", "d"], "e"]
+        prompt_parts: list[str] = [
+            child.expand()
+            for child in self.children
+        ]
+
+        # Second pass: we put continuously single values
+        # in lists.
+        # We leave the already existing lists alone.
+        # e.g. [["a", "b"], ["c", "d"], ["e"]]
+        temp_prompts: list[str] = []
+        buffer = []
+        for prompt_part in prompt_parts:
+            if isinstance(prompt_part, str):
+                buffer.append(prompt_part)
+            elif isinstance(prompt_part, list):
+                # Bundle previous values together
+                if buffer:
+                    temp_prompts.append(buffer.copy())
+                    buffer.clear()
+                # Store this one
+                temp_prompts.append(prompt_part)
+        if buffer:
+            temp_prompts.append(buffer.copy())
+
+        # Finally, we do the final product
+        # e.g. ["a c e", "a d e", "b c e", "b d e"]       
+        return [
+            " ".join(pair).strip()
+            for pair in product(*temp_prompts)
+        ]
+
+
+class Group:
+
+    def __init__(self, name: str, members: list[Block]):
+        self.name = name
+        self.members = members
+
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __repr__(self):
+        return f"Group {self.name!r} with {len(self.members)} members"
+
+
+class ExclusionGroup:
+
+    def __init__(self, name: str, members: list[Block | Group], weights: list[int] | None):
+        self.name = name
+        self.members = members
+        self.weights = weights
+
+    def choose_member(self) -> Block | Group:
+        return random.choices(self.members, weights=self.weights)[0]
+
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __repr__(self):
+        return f"ExclusionGroup {self.name!r} with {len(self.members)} members"
 
 
 class Block:
 
-    def __init__(self, name: str, parameters: dict[str, str | bool], keywords: list[str]) -> Block:
+    """
+    A block of keywords.
+
+    Parameters
+    ----------
+    name: str
+        Name of the block.
+    parameters: mapping of str to str or bool
+        Parameters passed in the config.
+    candidates: list of str
+        Candidates (can contain square brackets and parentheses).
+
+    Attributes
+    ----------
+    name: str
+        Name of the block
+    num: range
+        Possible number of keywords to pick.
+    separator: str
+        When picking multiple keywords from this block,
+        the separator to use when joining them.
+    force: bool
+        Whether all keywords in this block should be included in the prompt.
+        Note: not all combinations, all keywords.
+    keywords: list of str
+        Exhaustive list of all keywords that can be picked from this block.
+    weights: list of int or None
+        Generated at init, specifies the weight of each keyword.
+        Can be None, in which case the weight is equal for each keyword.
+    weighting: {"candidate-shallow", "candidate-deep", "keyword"}
+        How to tune probabilities when picking a keyword.
+        Refer to the guide, section "Weighting" for more information.
+    """
+
+    name: str
+    num: range
+    separator: str
+    force: bool
+    keywords: list[str]
+    weights: list[int] | None
+    weighting: Literal["candidate-shallow", "candidate-deep", "keyword"]
+
+    def __init__(self, name: str, candidates: list[str], parameters: dict[str, any]) -> Block:
         self.name = name
-        self.parameters = parameters
-        self.keywords = keywords
+        self.update_parameters(parameters)
+        self.keywords, self.weights = self._generate_keywords(candidates)
 
-    @classmethod
-    def from_lines(cls, lines: list[str]) -> Block:
-        """
-        Main constructor.
-        """
-        name_line = lines[0]
-        name, *params = name_line[1:-1].split("]")  # Trick for splitting in case the params are not specified
-        if params:
-            params = params[0][1:]  # Get the value and strip the opening parenthesis
-            parameters = cls.parse_parameters(params)
-        else:
-            parameters = {}
-        keywords = [line.strip() for line in lines[1:] if line.strip()]
-        return cls(name.strip(), parameters, keywords)
-
-    @staticmethod
-    def parse_parameters(param_str: str) -> dict[str, str | bool]:
-        parameters = {}
-        for param in param_str.split(";"):
-            if "=" in param:
-                key, value = param.split("=")
-                parameters[key.strip()] = value.strip()
-            else:
-                parameters[param.strip()] = True
-        return parameters
-
-    def generate_keywords(self, activated_blocks: list[str], exclusive_blocks: list[str]) -> list[str]:
-        if self.name in exclusive_blocks:
-            return []
-
-        if self.parameters.get("force"):
-            return self.force_generate_keywords()
-
-        num_param = self.parameters.get("num")
-        if num_param:
-            min_num, max_num = map(int, num_param.split("-")) if "-" in num_param else (int(num_param), int(num_param))
-        else:
-            min_num, max_num = (0, 1) if self.parameters.get("optional") else (1, 1)
-        num_keywords = random.randint(min_num, max_num)
-
-        return [self.generate_keyword() for _ in range(num_keywords)]
-
-    def force_generate_keywords(self) -> list[str]:
-        return [self.generate_keyword(keyword) for keyword in self.keywords]
-
-    def generate_keyword(self, keyword: str | None = None):
-        keyword = keyword or random.choice(self.keywords)
-        while "[" in keyword:
-            keyword = self.resolve_brackets(keyword)
-        while "(" in keyword:
-            keyword = self.resolve_parentheses(keyword)
-        return keyword.strip()
+    def __hash__(self):
+        return hash(self.name)
     
-    def resolve_brackets(self, keyword):
-        while "[" in keyword:
-            start = keyword.rfind("[")
-            end = keyword.find("]", start) + 1
-            choices = keyword[start + 1:end - 1].split("|")
-            choice = random.choice(choices).strip()
-            keyword = keyword[:start] + choice + keyword[end:]
-        return keyword
+    def __repr__(self):
+        return f"Block {self.name!r} with {len(self.keywords)} keywords"
 
-    def resolve_parentheses(self, keyword):
-        while "(" in keyword:
-            start = keyword.rfind("(")
-            end = keyword.find(")", start) + 1
-            choices = keyword[start + 1:end - 1].split("|") + [""]
-            choice = random.choice(choices).strip()
-            keyword = keyword[:start] + choice + keyword[end:]
-        return keyword
+    def update_parameters(self, parameters: dict[str, any]) -> None:
+        """
+        In-place method that takes a dictionary of parameters
+        and overrides the current values of the instance.
+
+        Parameters
+        ----------
+        parameters: dict of str to any value
+            The new parameters for the instance.
+            Unsupported parameters are ignored by this function.
+        """
+        self.num = range(1, 2)
+        if num_param := parameters.get("num"):
+            # Parses `2` as `(2, 2)` and `2-3` as `(2, 3)`
+            min_num, max_num = map(int, num_param.split("-")) if "-" in num_param else (int(num_param), int(num_param))
+            self.num = range(min_num, max_num + 1)
+        if parameters.get("optional"):
+            self.num = range(0, 2)
+
+        self.weighting = parameters.get("weighting", "candidate-deep")
+        assert self.weighting in {"candidate-shallow", "candidate-deep", "keyword"}
+
+        self.separator = parameters.get("separator", ", ")
+
+        self.force = parameters.get("force", False)
+
+    def _generate_keywords(self, keyword_candidates: list[str]) -> tuple[list[str], list[int] | None]:
+        """
+        Takes keyword candidates and expands them all,
+        returning an exhaustive list of all keywords
+        that can be picked from the block, and their weights.
+
+        Parameters
+        ----------
+        keyword_candidates: list of str
+            Keyword candidates to expand
+
+        Returns
+        -------
+        2-tuple of a list of str and a list of int
+            The first list is the exhaustive list of keywords.
+            The second one contains the weights for the choice of a parameter.
+        """
+        # Preliminary pass:
+        # 1. Clean up
+        # 2. Check validity
+        # 3. Convert to candidate tree
+        candidates: list[Candidate] = []
+        for candidate in keyword_candidates:
+            candidate = candidate.replace("(", "[").replace(")", " | ]")
+            # Avoids unexpected prompts
+            if not is_balanced(candidate):
+                raise SyntaxError(f"Unbalanced brackets in {candidate!r}")
+            candidate_repr = self._construct_parts(candidate)
+            candidate_tree = build_candidate_tree(candidate_repr)
+            candidates.append(candidate_tree)
+
+        if self.weighting == "candidate-shallow":
+            # TODO
+            raise NotImplemented
+
+        elif self.weighting == "candidate-deep":
+            final_keywords: list[tuple[str, int]] = []
+            # First step: create the exhaustive list for the candidate
+            # Second step: divide the probas by the number of candidates
+            groups: dict[int, list[str]] = {}
+            for group, candidate in enumerate(candidates):
+                groups.update({group: candidate.expand()})
+            # Scale by the total number of entries
+            total_entries = sum(map(len, groups.values()))
+            for group, entries in groups.items():
+                weight = round(1 / len(entries) * total_entries)
+                final_keywords.extend([
+                    (entry, weight)
+                    for entry in entries
+                ])
+            return list(zip(*final_keywords))  # unzip
+
+        elif self.weighting == "keyword":
+            # Create the exhaustive list for the candidate,
+            # give an equal weight for each.
+            final_keywords_nested: list[list[str]] = [
+                candidate.expand()
+                for candidate in candidates
+            ]
+            # Flatten
+            final_keywords: list[str] = [
+                keyword
+                for nested_keywords in final_keywords_nested
+                for keyword in nested_keywords
+            ]
+            return final_keywords, None
+
+        else:
+            # FIXME: should be handled by the schema valication
+            raise ValueError(
+                f"Expected parameter weighting to be any of "
+                f"{{'candidate-shallow', 'candidate-deep', 'keyword'}}, "
+                f"got {self.weighting!r}. "
+            )
+
+    def generate_keyword(self) -> str:
+        return self.separator.join(
+            # FIXME: can choose multiple keywords from a same candidate
+            random.choices(
+                self.keywords,
+                self.weights,
+                k=min(random.choice(self.num), len(self.keywords)),
+            )
+        )
+
+    def _construct_parts(self, candidate: str) -> list:
+        """
+        Takes the string representation of a candidate,
+        and converts it to a tree-style structure, which
+        can be further processed.
+
+        Parameters
+        ----------
+        candidate: str
+            The candidate keyword.
+            E.g. "[[pristine | ] red] Ford Mustang | [sports | ] Porsche 911"
+
+        Returns
+        -------
+        nested list of str
+            The tree-style representation of the candidate.
+            E.g. [[[[['pristine', ''], 'red']], 'Ford Mustang'], [['sports', ''], 'Porsche 911']]
+        """
+        # Since we strip a lot, we will explicitly add spaces around
+        # the pipes, otherwise the splitting method use down below
+        # might not work (it wouldn't find the empty string).
+        # E.g. `an| example|` -> `an | example | `.
+        candidate = re.sub(r"(\s{0,1})\|(\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
+
+        # First pass: split based on the pipes
+        split_parts = []
+        buffer = []
+        nesting_level = 0
+        for c in candidate:
+            if c == "[":
+                nesting_level += 1
+            elif c == "]":
+                nesting_level -= 1
+
+            buffer.append(c)
+
+            if c == "|" and nesting_level == 0:
+                split_parts.append("".join(buffer[:-1]).strip())
+                buffer.clear()
+
+        if buffer:
+            split_parts.append("".join(buffer).strip())
+            buffer.clear()
+
+        # Second pass: isolate nested values
+        isolated_parts: list[str | list[str]] = []
+        buffer = []
+        nesting_level = 0
+        for part in split_parts:
+            nested_parts_buffer: list[str] = []
+            if part == "":
+                isolated_parts.append(part)
+                continue
+            if "[" in part:
+                # There are nested values.
+                # If there is a value besides (e.g. `car` in `[sports | ] car`),
+                # then we must keep them together (they form a single group)
+                # so we'll nest them.
+                for c in part:
+                    if c == "[":
+                        nesting_level += 1
+                        if nesting_level == 1:
+                            if buffer:
+                                nested_parts_buffer.append("".join(buffer).strip())
+                                buffer.clear()
+                            continue
+                    elif c == "]":
+                        nesting_level -= 1
+                        if nesting_level == 0:
+                            if buffer:
+                                nested_parts_buffer.append("".join(buffer).strip())
+                                buffer.clear()
+                            continue
+                    buffer.append(c)
+                if buffer:
+                    nested_parts_buffer.append("".join(buffer).strip())
+                    buffer.clear()
+                isolated_parts.append(nested_parts_buffer)
+            else:
+                # The part does not have a nested value
+                isolated_parts.append(part)
+
+        # Third pass: call recursively and collect the results
+        parsed_parts = []
+        for part in isolated_parts:
+            if isinstance(part, str):
+                if "|" in part:
+                    parsed_parts.append(self._construct_parts(part))
+                else:
+                    parsed_parts.append(part)
+            elif isinstance(part, list):
+                nested_part_parts = []
+                for nested_part in part:
+                    if "|" in nested_part or "[" in nested_part:
+                        nested_part_parts.append(self._construct_parts(nested_part))
+                    else:
+                        nested_part_parts.append(nested_part)
+                parsed_parts.append(nested_part_parts)
+
+        return parsed_parts
 
 
 class Generator:
 
     """
     A generator created from a config.
-    Capable of creating new prompts on demand and with no overhead once built.
+    Capable of creating new prompts on demand.
     """
 
-    def __init__(self, blocks: Sequence[Block]) -> Generator:
-        self.blocks = blocks
+    def __init__(self, elements: list[Block | Group | ExclusionGroup], blocks_order: dict[str, int]) -> Generator:
+        self.elements = elements
+        self.blocks_order = blocks_order
 
     @classmethod
     def from_file(cls, file_path: Path) -> Generator:
+        # Parse the config
+        with file_path.open(mode="rb") as f:
+            config = tomllib.load(f)
+
+        # Since toml returns the config in alphabetical order,
+        # we read the file to find the order of the blocks
         with file_path.open(mode="r") as f:
-            blocks = []
-            current_block_lines = []
-            for line in f.readlines():
-                line = line.strip()
-                if line.startswith("#"):
-                    continue
-                if not line:
-                    # And empty line indicates the end of the previous block
-                    if current_block_lines:
-                        blocks.append(Block.from_lines(current_block_lines))
-                    current_block_lines = []
-                if line:
-                    current_block_lines.append(line)
-            else:
-                # Last block
-                if current_block_lines:
-                    blocks.append(Block.from_lines(current_block_lines))
-            return cls(blocks)
+            pattern = re.compile(r"\[blocks\.(.+?)\]")
+            # Using `finditer`, we are guaranteed that
+            # the matched blocks are listed in the definition order
+            blocks_order: dict[str, int] = {
+                match.group(0): match.start()
+                for match in pattern.finditer(f.read())
+            }
 
-    def generate_prompt(self) -> str:
-        keywords = []
-        activated_blocks = set()
-        exclusive_blocks = set()
+        # Validate the JSON schema
+        schema_file = Path(__file__).parent / "config-schema.json"
+        if schema_file.is_file():
+            with schema_file.open("rb") as f:
+                schema = json.load(f)
+            jsonschema.validate(config, schema)
+        else:
+            logger.warning(
+                f"Did not find schema at {schema_file!s} "
+                f"to validate the configuration against. "
+            )
 
-        for block in self.blocks:
-            block_keywords = block.generate_keywords(activated_blocks, exclusive_blocks)
-            if block_keywords:
-                activated_blocks.add(block.name)
-                exclusive_blocks.update(block.parameters.get("exclusive", "").split(","))
-            keywords.extend(block_keywords)
+        # Create the blocks
+        blocks = {
+            Block(name, block.get("candidates", list()), block)
+            for name, block in config["blocks"].items()
+        }
+        mappings = {f"blocks.{block.name}": block for block in blocks}
 
-        for block_name in activated_blocks:
-            paired_blocks = [b for b in self.blocks if b.name in block.parameters.get("pair", "").split(",")]
-            for paired_block in paired_blocks:
-                keywords.extend(paired_block.generate_keywords(activated_blocks, exclusive_blocks))
+        # Create the groups
+        groups = [
+            Group(
+                name,
+                [
+                    mappings[group_name]
+                    for group_name in group.get("members", list())
+                ],
+            )
+            for name, group in config["groups"].items()
+        ]
+        mappings.update({f"groups.{group.name}": group for group in groups})
 
-        return ", ".join(keywords)
+        # Create the exclusion groups
+        exclusion_groups = [
+            ExclusionGroup(
+                name, 
+                [
+                    mappings[member_name]
+                    for member_name in group.get("members", list())
+                ],
+                group.get("weights"),
+            )
+            for name, group in config["exclusions"].items()
+        ]
+
+        # TODO: rename all this shit after this
+
+        # List blocks that are present in at least one group
+        used_blocks = flatten_groups([*groups, *exclusion_groups])
+        # List groups that are present in exclusion groups
+        groups_in_exclusion_groups = [
+            group
+            for exclusion_group in exclusion_groups
+            for group in groups_in_group(exclusion_group)
+        ]
+
+        # List the blocks that are not present in any groups
+        elements = blocks.difference(used_blocks)
+        # Also remove groups present in the exclusion groups
+        leftover_groups = [
+            group
+            for group in groups
+            if group not in groups_in_exclusion_groups
+        ]
+
+        # Add the remaining groups
+        elements.update(leftover_groups)
+        # And the exclusion groups
+        elements.update(exclusion_groups)
+
+        return cls(elements, blocks_order)
+
+    def sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
+        return min(
+            self.blocks_order[f"[blocks.{block.name}]"]
+            for block in flatten_groups([element])
+        )
+
+    def generate_prompts(self, n: int, *, mode: Literal["random", "exhaustive"]) -> list[str]:
+        prompts = []
+
+        if mode == "random":
+            for _ in range(n):
+                prompt = []
+                activated_blocks = []
+                stack = [*self.elements]
+                while stack:
+                    element = stack.pop()
+                    if isinstance(element, Block):
+                        activated_blocks.append(element)
+                    elif isinstance(element, Group):
+                        stack.extend(element.members)
+                    elif isinstance(element, ExclusionGroup):
+                        stack.append(element.choose_member())
+                for block in sorted(activated_blocks, key=self.sort_elements):
+                    keyword = block.generate_keyword()
+                    if keyword:  # Ignore empty keywords
+                        prompt.append(keyword)
+                prompts.append(", ".join(prompt))
+
+        elif mode == "exhaustive":
+            # TODO
+            raise NotImplemented
+
+        return prompts
 
 
 if __name__ == "__main__":
-    _parser = ArgumentParser(
+    parser = ArgumentParser(
         "Creates Stable Diffusion prompts given a configuration file."
     )
-    _parser.add_argument("content_file", type=Path, help="File containing the prompt parameters.")
-    #_parser.add_argument("-m", "--mode", choices=("random", "exhaustive"), default="random", help="Mode of generation. Warning: exhaustive generates ALL possibilities, thus the number of prompts scales exponentially.")
-    _parser.add_argument("-n", "--number", type=int, default="random", help="Number of prompts to generate. Ignored if using `mode=exhaustive`.")
-    _parser.add_argument("-o", "--output", type=Path, default=Path("./"), help="File to save the prompts to.")
+    parser.add_argument("content_file", type=Path, help="File containing the prompt generation configuration.")
+    parser.add_argument("-m", "--mode", choices=("random", "exhaustive"), default="random", help="Mode of generation. Warning: exhaustive generates ALL possibilities, thus the number of prompts scales exponentially.")  # TODO
+    parser.add_argument("-n", "--number", type=int, help="Number of prompts to generate. Ignored if `mode=exhaustive`.")
+    parser.add_argument("-o", "--output", type=Path, default=Path("./output.txt"), help="File to save the prompts to. By default, './output.txt'")
 
-    args = _parser.parse_args()
-    
+    args = parser.parse_args()
+
     generator = Generator.from_file(args.content_file)
+    prompts = generator.generate_prompts(args.number, mode=args.mode)
     with args.output.open("w") as f:
-        for _ in range(args.number):
-            f.write(f"{generator.generate_prompt()}\n")
+        f.write("\n".join(prompts))
+    # Warn if there are duplicates
+    n_uniques = len(set(prompts))
+    duplicates = len(prompts) - n_uniques
+    if duplicates > 0:
+        logger.info(f"The generated prompts have duplicates ({duplicates}/{len(prompts)})")
