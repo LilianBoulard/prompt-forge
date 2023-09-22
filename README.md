@@ -139,11 +139,12 @@ candidates = ["[[large | small] | beautiful] car", "van"]
 
 Here is the probability distribution for each candidate keyword depending on the weighting:
 
-| Weighting | "*van*" | "*large car*" | "*small car*" | "*beautiful car*" |
-| --- | --- | --- | --- | --- |
-| `candidate-shallow` | 1/2 = 50% |  1/2 * 1/2 * 1/2 = 12.5% | 1/2 * 1/2 * 1/2 = 12.5% | 1/2 * 1/2 = 25% |
-| `candidate-deep` | 1/2 = 50% | 1/2 * 1/3 = 16.6% | 1/2 * 1/3 = 16.6% | 1/2 * 1/3 = 16.6% |
-| `keyword` | 1/4 = 25% | 1/4 = 25% | 1/4 = 25% | 1/4 = 25% |
+| | `candidate-shallow` | `candidate-deep` | `keyword` |
+| --- | --- | --- | --- |
+| **"*van*"** | 1/2 = 50% | 1/2 = 50% | 1/4 = 25% |
+| **"*large car*"** | 1/2 * 1/2 * 1/2 = 12.5% | 1/2 * 1/3 = 16.6% | 1/4 = 25% |
+| **"*small car*"** | 1/2 * 1/2 * 1/2 = 12.5% | 1/2 * 1/3 = 16.6% | 1/4 = 25% |
+| **"*beautiful car*"** | 1/2 * 1/2 = 25% | 1/2 * 1/3 = 16.6% | 1/4 = 25% |
 
 ###### Exclusion groups
 
