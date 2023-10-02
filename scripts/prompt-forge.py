@@ -513,7 +513,7 @@ class Generator:
         # Create the blocks
         blocks = {
             Block(name, block.get("candidates", list()), block)
-            for name, block in config["blocks"].items()
+            for name, block in config.get("blocks", {}).items()
         }
         mappings = {f"blocks.{block.name}": block for block in blocks}
 
@@ -526,7 +526,7 @@ class Generator:
                     for group_name in group.get("members", list())
                 ],
             )
-            for name, group in config["groups"].items()
+            for name, group in config.get("groups", {}).items()
         ]
         mappings.update({f"groups.{group.name}": group for group in groups})
 
@@ -540,7 +540,7 @@ class Generator:
                 ],
                 group.get("weights"),
             )
-            for name, group in config["exclusions"].items()
+            for name, group in config.get("exclusions", {}).items()
         ]
 
         # List blocks that are present in at least one group
