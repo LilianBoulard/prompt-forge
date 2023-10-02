@@ -1,15 +1,17 @@
+import sys
+
 import launch
 
-from pathlib import Path
+packages = {
+    ("jsonschema", True),
+    ("toml", sys.version_info.major == 3 and sys.version_info.minor <= 10)  # Not required from 3.11 onward
+}
 
 
-req_file = Path(__file__).parent / "requirements.txt"
-
-with req_file.open() as file:
-    for package in file:
-        package_name = package.strip()
+for package, required in packages:
+    if required:
         try:
-            launch.run_pip(f"install -U {package_name}", f"sd-webui-prompt-forge requirement: {package_name}")
+            launch.run_pip(f"install -U {package}", f"sd-webui-prompt-forge requirement: {package}")
         except Exception as e:
             print(e)
-            print(f"Failed to install {package_name}, script prompt-forge might not work")
+            print(f"Failed to install {package}, script prompt-forge might not work")
