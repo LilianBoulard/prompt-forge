@@ -1,0 +1,50 @@
+[blocks.base]
+candidates = [
+    "Ford Mustang",
+    "Porsche 911",
+]
+
+[blocks.model]
+candidates = [
+    "[1970 | 1980 | 1990 | 2000 | 2010 | 2020] model",
+]
+
+[blocks.color]
+weighting = "keyword"
+candidates = [
+    "[blue | red | mustard] paint job",
+]
+
+[blocks.scene]
+optional = true
+candidates = [
+    "on the (busy) highway",
+    "in the desert",
+    "(drifting) on a racing track",
+    "in the streets of [Paris | New York]",
+]
+
+[blocks.lightning]
+optional = true
+weighting = "keyword"
+candidates = [
+    "[smooth | soft | ambient] lightning",
+    "direct sunlight",
+    "moonlight:0.8",
+]
+
+[blocks.image-details]
+optional = true
+candidates = [
+    "realistic",
+    "highly detailed",
+    "photography",
+    "masterpiece",
+]
+
+[blocks.camera-view]
+optional = true
+weighting = "keyword"
+candidates = [
+    "[low | wide | ultra-wide] angle",
+]
