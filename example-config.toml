@@ -1,3 +1,14 @@
+[blocks.resolution]
+force = true
+candidates = [
+    "height:440",
+    "width:780",
+]
+
+# Isolate the prefix to avoid mistakes down the line
+[blocks.prompt-prefix]
+candidates = ["prompt:"]
+
 [blocks.base]
 candidates = [
     "Ford Mustang",
