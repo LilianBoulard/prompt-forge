@@ -1,4 +1,4 @@
-# Stable Diffusion prompt generator
+# Stable Diffusion prompt forge
 
 This script aims to automate prompt generation for Stable Diffusion.
 
