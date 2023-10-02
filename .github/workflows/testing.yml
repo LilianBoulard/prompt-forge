@@ -32,8 +32,10 @@ jobs:
         with:
             python-version: ${{ matrix.python-version }}
         name: 'Setup python'
-      - shell: python -m pip install pytest
+      - shell: bash
+        run: python -m pip install pytest
         name: 'Install testing dependencies'
-      - shell: pytest -n auto
+      - shell: bash
+        run: pytest -n auto
         working-directory: ${{ runner.temp }}
         name: 'Run tests'
