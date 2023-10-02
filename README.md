@@ -2,7 +2,7 @@
 
 This relatively simple script aims to automate prompt generation for Stable Diffusion.
 
-It is best used in conjonction with [AUTOMATIC111's Stable Diffusion Webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) custom script "prompt file".
+It is best used in conjonction with [AUTOMATIC111's Stable Diffusion Webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) script "Prompts from file or textbox".
 
 ## Usage
 
@@ -10,7 +10,7 @@ The usage is quite straightforward as soon as you have you configuration file re
 
 - Setup Python >= 3.11
 - Run `python sd-prompt-gen.py -h` for a list of parameters you can pass to the script. The first one will always be the configuration file, like so: `python sd-prompt-gen.py my-config.toml`.
-- Once you have your prompts ready in a file, go to your SD Webui, to the `txt2img` tab, and down in the scripts section, select `prompts from file`.
+- Once you have your prompts ready in a file, go to your SD Webui, to the `txt2img` tab, and down in the scripts section, select `Prompts from file or textbox`.
 - Tune the other parameters (e.g., image size, negative embeddings, batch count/size, etc.).
 - Click `Generate`, and wait for it to finish!
 
