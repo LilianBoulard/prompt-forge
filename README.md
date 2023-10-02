@@ -1,31 +1,24 @@
 # Stable Diffusion prompt generator
 
-This relatively simple script aims to automate prompt generation for Stable Diffusion.
+This script aims to automate prompt generation for Stable Diffusion.
 
-It is best used in conjonction with [AUTOMATIC111's Stable Diffusion Webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) script "Prompts from file or textbox".
+It is an extension designed for [AUTOMATIC1111's Stable Diffusion Webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui).
 
-## Usage
+## Install
 
-The usage is quite straightforward as soon as you have you configuration file ready:
-
-- Setup Python >= 3.11
-- Run `python sd-prompt-gen.py -h` for a list of parameters you can pass to the script. The first one will always be the configuration file, like so: `python sd-prompt-gen.py my-config.toml`.
-- Once you have your prompts ready in a file, go to your SD Webui, to the `txt2img` tab, and down in the scripts section, select `Prompts from file or textbox`.
-- Tune the other parameters (e.g., image size, negative embeddings, batch count/size, etc.).
-- Click `Generate`, and wait for it to finish!
+Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge).
 
 ## The configuration file
 
-To start generating prompts automatically, the first thing you need is a configuration file.
-This document, written in [the `toml` format](https://toml.io/), specifies the keywords and parameters for your prompts.
+To start forging prompts, you need a **configuration file**: this document, written in [the `toml` format](https://toml.io/), specifies the keywords and parameters for your prompts.
 
 ### Basic usage
 
-Blocks are the foundation of the configuration system: each block defines a set of candidate keywords that can be selected for the prompt.
-The order of blocks within the file has an importance, as the picked keywords will be joined together one after the other.
+**Blocks** are the foundation of the configuration system: each block defines a set of candidate keywords that can be selected for the prompt.
+The order of blocks within the file has an importance: they will have the same order in the prompt.
 Here's a simple block:
 
-```
+```toml
 # Here, "my-first-block" is an arbitrary name
 [blocks.my-first-block]
 candidates = [
@@ -36,7 +29,7 @@ candidates = [
 Notice our block named `my-first-block` is defined within the namespace `blocks`. This is mandatory!
 Let's continue with a concrete example of the system in action. Given the following config (saved in `config.toml`):
 
-```
+```toml
 [blocks.scene]
 candidates = [
     "dancing folks",
@@ -47,7 +40,7 @@ candidates = [
 candidates = ["on a plaza"]
 ```
 
-Running the script with this command: `python sd-prompt-gen.py config.toml --mode exhaustive` will return these prompts:
+Running the script with in mode `Exhaustive` will return these prompts:
 
 ```
 dancing folks, on a plaza
@@ -58,13 +51,13 @@ inhabitants having lunch, on a plaza
 
 ### Advanced usage
 
-A great deal of effort has also been put into providing the most sensible defaults, so that configuration files can be as simple as possible.
+A great deal of effort has also been put into providing the most sensible defaults, so that configuration files can be as short as possible.
 
 Despite its apparent simplicity, the system is highly customizable and allows for great complexity.
 
 #### Candidates syntax
 
-The candidate system provides an intuitive syntax to simplify writing keywords:
+The **candidate system** provides an intuitive way of simplifying writing keywords:
 - Multiple possibilities can be specified using a pipe (` | `). For a specific part of the candidate, it has to be specified within square brackets. For instance, `[large | small] car` will result either in `large car` or `small car` (1/2 chance each). For a whole keyword, no brackets can be specified, e.g. `small van | large car` will result in either `small van` or `large car`. 
 - Parts between parenthesis have a chance of not being picked. For example, `(large) car` is intuitively equivalent to `[large | ] car`, and will thus result in either `large car` or `car` (1/2 chance each). If used with a pipe for multiple options, it can replace the square brackets: for instance, `(large | small) car` will result in either `large car`, `small car` or `car` (1/3 chance each).
 
@@ -72,7 +65,7 @@ Both of those can be nested without restriction (e.g., `(1970 | 1980 | 1990) [((
 
 #### Blocks parameters
 
-Blocks support a number of parameters to customize their behavior:
+Blocks support the following parameters for customizing their behavior:
 - `force` - This boolean parameter indicates that a keyword extracted from each candidate in the block will be included in the prompt. Incompatible with other parameters.
 - `num` - This parameter takes either a positive number (e.g., `num=2`) or a range of two positive numbers (e.g., `num=1-3`). It indicates the number of candidates that will be randomly selected within the block to generate one keyword each. If unspecified, the default value is `1` (only one keyword will be selected in the block).
 - `separator` - Takes a string, which will be used as the separator between entries chosen within the block (when `num`>1). By default, `", "`.
@@ -90,7 +83,7 @@ Groups, on the other hand, are sets of blocks "bundled" together. They are espec
 
 For example:
 
-```
+```toml
 [blocks.clothing-shoes]
 candidates = ["heels", "moccasin"]
 
@@ -119,6 +112,39 @@ With this setup in place, it is not possible to get the prompt `heels, vest, jea
 
 Also, note that their position within the configuration file has no impact.
 
+#### Generation parameters
+
+Just like the built-in script [prompt_from_file](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/master/scripts/prompts_from_file.py), it is possible to specify the generation parameters within the configuration. For example:
+
+```toml
+# Use SDXL or SD1.5
+[blocks.model]
+candidates = [
+    "model: [dXL_v10VAEFix | sd-v1-5-inpainting]"
+]
+
+# Use one of these three seeds
+[blocks.seed]
+candidates = ["seed: [1 | 2 | 3]"]
+
+[blocks.prompt-declaration]
+# Here, since we split the prompt candidates in parts below,
+# we declare the prefix in its separate block
+candidates = ["prompt:"]
+
+[blocks.subject]
+candidates = [
+    "businessman",
+    "college student",
+]
+
+[blocks.scene]
+candidates = [
+    "in the nyc metro",
+    "at the gym",
+]
+```
+
 #### Weighting
 
 To customize the probabilistic weighting of keywords:
@@ -126,18 +152,19 @@ To customize the probabilistic weighting of keywords:
 ##### Blocks
 
 Blocks support the parameter `weighting`, for which there are three possible values:
-- `candidate-shallow` - The initial probability is spread accross the candidates, then between the options ; with each new nesting layer, the probability space is spread (thus the probability is lower and lower with each one).
+- `candidate-shallow` - The initial probability is spread accross the candidates, then between the options ; with each new nesting layer, the probability spread (thus is lower and lower with each one).
 - `candidate-deep` (default) - The initial probability is speach accross the candidates, then spread accross all possibilities.
 - `keyword` - The probability is spread accross all keywords, so each one has an equal chance of being picked.
 
-For example, with the configuration block:
-```
+For example, with this configuration block:
+
+```toml
 [blocks.example]
 weighting = "..."
 candidates = ["[[large | small] | beautiful] car", "van"]
 ```
 
-Here is the probability distribution for each candidate keyword depending on the weighting:
+here's the probability distribution depending on the weighting:
 
 | | `candidate-shallow` | `candidate-deep` | `keyword` |
 | --- | --- | --- | --- |
@@ -148,13 +175,13 @@ Here is the probability distribution for each candidate keyword depending on the
 
 ###### Exclusion groups
 
-Exclusion groups support the parameter `weights`, to which can be passed a list of integers with a size equal to the `members`.
-The higher the number (weight), the higher the probability of the block/group being chosen. Example:
+Exclusion groups support the parameter `weights`, which takes a list of integers. Its size must be equal to the size of `members`.
+The higher the number (weight), the higher the probability of the block/group being chosen. For example:
 
-```
+```toml
 [exclusions.example]
 members = [blocks.my-block, groups.my-group]
 weights = [1, 2]
 # `groups.my-group` will be chosen twice as much as `blocks.my-block`.
-# The numbers don't really matter, the ratio does.
+# The numbers don't really matter, only the ratio does.
 ```
