@@ -12,7 +12,7 @@ import copy
 import json
 import random
 import re
-import tomllib
+import sys
 from itertools import product
 from pathlib import Path
 from typing import Literal
@@ -21,10 +21,16 @@ import gradio as gr
 import jsonschema
 import modules.scripts as scripts
 from modules import errors
-from modules.processing import Processed, process_images
+from modules.processing import (Processed, StableDiffusionProcessing,
+                                process_images)
 from modules.shared import state
-from modules.processing import StableDiffusionProcessing
+
 from scripts.prompts_from_file import cmdargs
+
+if sys.version_info.major == 3 and sys.version_info.minor <= 10:
+    import toml as tomllib
+else:
+    import tomllib
 
 
 def is_balanced(parens: str) -> bool:
