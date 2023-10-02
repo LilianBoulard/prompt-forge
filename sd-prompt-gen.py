@@ -38,23 +38,22 @@ def build_candidate_tree(candidate_part: list | str) -> Candidate:
     return node
 
 
-def flatten_groups(elements: list[Block | Group | ExclusionGroup]) -> set[Block]:
+def blocks_in_group(element: Block | Group | ExclusionGroup) -> set[Block]:
     """
-    Given a list of elements, flattens it all to get the blocks constitutive
-    of that set.
+    Given an element, lists the blocks it is constituted of.
 
     Parameters
     ----------
-    elements: list of Block, Group or ExclusionGroup
-        Mixed list containing the elements to flatten.
+    element: Block, Group or ExclusionGroup
+        Element to flatten.
 
     Returns
     -------
     set of Block
-        The elements, flattened to only the blocks they contain.
+        The element, flattened to only the blocks it contains.
     """
     blocks = []
-    members_queue = elements.copy()
+    members_queue = [element]
     while members_queue:
         member = members_queue.pop()
         if isinstance(member, Block):
@@ -471,8 +470,6 @@ class Generator:
         # we read the file to find the order of the blocks
         with file_path.open(mode="r") as f:
             pattern = re.compile(r"\[blocks\.(.+?)\]")
-            # Using `finditer`, we are guaranteed that
-            # the matched blocks are listed in the definition order
             blocks_order: dict[str, int] = {
                 match.group(0): match.start()
                 for match in pattern.finditer(f.read())
@@ -523,25 +520,27 @@ class Generator:
             for name, group in config["exclusions"].items()
         ]
 
-        # TODO: rename all this shit after this
-
         # List blocks that are present in at least one group
-        used_blocks = flatten_groups([*groups, *exclusion_groups])
+        used_blocks = {
+            block
+            for group in {*groups, *exclusion_groups}
+            for block in blocks_in_group(group)
+        }
         # List groups that are present in exclusion groups
-        groups_in_exclusion_groups = [
+        groups_in_exclusion_groups = {
             group
             for exclusion_group in exclusion_groups
             for group in groups_in_group(exclusion_group)
-        ]
+        }
 
         # List the blocks that are not present in any groups
         elements = blocks.difference(used_blocks)
-        # Also remove groups present in the exclusion groups
-        leftover_groups = [
+        # List groups present in exclusion groups
+        leftover_groups = {
             group
             for group in groups
             if group not in groups_in_exclusion_groups
-        ]
+        }
 
         # Add the remaining groups
         elements.update(leftover_groups)
@@ -553,7 +552,7 @@ class Generator:
     def sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
         return min(
             self.blocks_order[f"[blocks.{block.name}]"]
-            for block in flatten_groups([element])
+            for block in blocks_in_group(element)
         )
 
     def generate_prompts(self, n: int, *, mode: Literal["random", "exhaustive"]) -> list[str]:
@@ -591,10 +590,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("content_file", type=Path, help="File containing the prompt generation configuration.")
     parser.add_argument("-m", "--mode", choices=("random", "exhaustive"), default="random", help="Mode of generation. Warning: exhaustive generates ALL possibilities, thus the number of prompts scales exponentially.")  # TODO
-    parser.add_argument("-n", "--number", type=int, help="Number of prompts to generate. Ignored if `mode=exhaustive`.")
+    parser.add_argument("-n", "--number", type=int, required=False, help="Number of prompts to generate. Ignored if `mode=exhaustive`.")
     parser.add_argument("-o", "--output", type=Path, default=Path("./output.txt"), help="File to save the prompts to. By default, './output.txt'")
 
     args = parser.parse_args()
+
+    # Check number is provided if mode=random
+    if args.mode == "random" and not args.number:
+        raise ValueError("`--number` is required when using `mode=random`")
 
     generator = Generator.from_file(args.content_file)
     prompts = generator.generate_prompts(args.number, mode=args.mode)
@@ -604,4 +607,4 @@ if __name__ == "__main__":
     n_uniques = len(set(prompts))
     duplicates = len(prompts) - n_uniques
     if duplicates > 0:
-        logger.info(f"The generated prompts have duplicates ({duplicates}/{len(prompts)})")
+        logger.warning(f"The generated prompts contain duplicates ({duplicates}/{len(prompts)})")
