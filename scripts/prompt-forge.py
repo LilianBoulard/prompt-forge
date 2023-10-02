@@ -96,10 +96,6 @@ def groups_in_group(group: Group | ExclusionGroup) -> list[Group | ExclusionGrou
     return set(groups)
 
 
-class DryRun(BaseException):
-    pass
-
-
 class Candidate:
 
     """
