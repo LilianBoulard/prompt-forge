@@ -1,16 +1,30 @@
+"""
+prompt-forge
+
+Author: Lilian Boulard <https://github.com/LilianBoulard>
+
+Licensed under the GNU Affero General Public License.
+"""
+
 from __future__ import annotations
 
+import copy
 import json
 import random
 import re
 import tomllib
-from argparse import ArgumentParser
 from itertools import product
 from pathlib import Path
 from typing import Literal
 
+import gradio as gr
 import jsonschema
-from loguru import logger
+import modules.scripts as scripts
+from modules import errors
+from modules.processing import Processed, process_images
+from modules.shared import state
+from processing import StableDiffusionProcessing
+from prompts_from_file import cmdargs
 
 
 def is_balanced(parens: str) -> bool:
@@ -107,7 +121,7 @@ class Candidate:
             (self.value is not None and self.children)
             or (self.value is None and not self.children)
         ):
-            logger.error(
+            errors.report(
                 "Candidate must either be a leaf "
                 "(have a value) or a dummy (has children). " 
                 f"Has both: {self.value=}, {self.children=}"
@@ -288,13 +302,14 @@ class Block:
             candidate = candidate.replace("(", "[").replace(")", " | ]")
             # Avoids unexpected prompts
             if not is_balanced(candidate):
-                raise SyntaxError(f"Unbalanced brackets in {candidate!r}")
+                errors.report(f"Unbalanced brackets in {candidate!r}")
             candidate_repr = self._construct_parts(candidate)
             candidate_tree = build_candidate_tree(candidate_repr)
             candidates.append(candidate_tree)
 
         if self.weighting == "candidate-shallow":
             # TODO
+            errors.report("`candidate-shallow` is not yet implemented")
             raise NotImplemented
 
         elif self.weighting == "candidate-deep":
@@ -330,8 +345,8 @@ class Block:
             return final_keywords, None
 
         else:
-            # FIXME: should be handled by the schema valication
-            raise ValueError(
+            # FIXME: should be handled by the schema validation
+            errors.report(
                 f"Expected parameter weighting to be any of "
                 f"{{'candidate-shallow', 'candidate-deep', 'keyword'}}, "
                 f"got {self.weighting!r}. "
@@ -339,7 +354,8 @@ class Block:
 
     def generate_keyword(self) -> str:
         return self.separator.join(
-            # FIXME: can choose multiple keywords from a same candidate
+            # FIXME: can choose multiple keywords from a same candidate,
+            # which is probably not the expected behavior
             random.choices(
                 self.keywords,
                 self.weights,
@@ -461,19 +477,17 @@ class Generator:
         self.blocks_order = blocks_order
 
     @classmethod
-    def from_file(cls, file_path: Path) -> Generator:
+    def from_string(cls, configuration: str) -> Generator:
         # Parse the config
-        with file_path.open(mode="rb") as f:
-            config = tomllib.load(f)
+        config = tomllib.loads(configuration)
 
-        # Since toml returns the config in alphabetical order,
-        # we read the file to find the order of the blocks
-        with file_path.open(mode="r") as f:
-            pattern = re.compile(r"\[blocks\.(.+?)\]")
-            blocks_order: dict[str, int] = {
-                match.group(0): match.start()
-                for match in pattern.finditer(f.read())
-            }
+        # Since toml returns the config as an unordered JSON document,
+        # we read the configuration to find the order of the blocks
+        pattern = re.compile(r"\[blocks\.(.+?)\]")
+        blocks_order: dict[str, int] = {
+            match.group(0): match.start()
+            for match in pattern.finditer(configuration)
+        }
 
         # Validate the JSON schema
         schema_file = Path(__file__).parent / "config-schema.json"
@@ -482,7 +496,7 @@ class Generator:
                 schema = json.load(f)
             jsonschema.validate(config, schema)
         else:
-            logger.warning(
+            errors.report(
                 f"Did not find schema at {schema_file!s} "
                 f"to validate the configuration against. "
             )
@@ -555,56 +569,171 @@ class Generator:
             for block in blocks_in_group(element)
         )
 
-    def generate_prompts(self, n: int, *, mode: Literal["random", "exhaustive"]) -> list[str]:
+    def generate_random_prompts(self, n: int) -> list[str]:
         prompts = []
-
-        if mode == "random":
-            for _ in range(n):
-                prompt = []
-                activated_blocks = []
-                stack = [*self.elements]
-                while stack:
-                    element = stack.pop()
-                    if isinstance(element, Block):
-                        activated_blocks.append(element)
-                    elif isinstance(element, Group):
-                        stack.extend(element.members)
-                    elif isinstance(element, ExclusionGroup):
-                        stack.append(element.choose_member())
-                for block in sorted(activated_blocks, key=self.sort_elements):
-                    keyword = block.generate_keyword()
-                    if keyword:  # Ignore empty keywords
-                        prompt.append(keyword)
-                prompts.append(", ".join(prompt))
-
-        elif mode == "exhaustive":
-            # TODO
-            raise NotImplemented
-
+        for _ in range(n):
+            prompt = []
+            activated_blocks = []
+            stack = [*self.elements]
+            while stack:
+                element = stack.pop()
+                if isinstance(element, Block):
+                    activated_blocks.append(element)
+                elif isinstance(element, Group):
+                    stack.extend(element.members)
+                elif isinstance(element, ExclusionGroup):
+                    stack.append(element.choose_member())
+            for block in sorted(activated_blocks, key=self.sort_elements):
+                keyword = block.generate_keyword()
+                if keyword:  # Ignore empty keywords
+                    prompt.append(keyword)
+            prompts.append(", ".join(prompt))
         return prompts
 
+    def generate_exhaustive_prompts(self) -> list[str]:
+        # TODO
+        raise NotImplemented
 
-if __name__ == "__main__":
-    parser = ArgumentParser(
-        "Creates Stable Diffusion prompts given a configuration file."
-    )
-    parser.add_argument("content_file", type=Path, help="File containing the prompt generation configuration.")
-    parser.add_argument("-m", "--mode", choices=("random", "exhaustive"), default="random", help="Mode of generation. Warning: exhaustive generates ALL possibilities, thus the number of prompts scales exponentially.")  # TODO
-    parser.add_argument("-n", "--number", type=int, required=False, help="Number of prompts to generate. Ignored if `mode=exhaustive`.")
-    parser.add_argument("-o", "--output", type=Path, default=Path("./output.txt"), help="File to save the prompts to. By default, './output.txt'")
 
-    args = parser.parse_args()
+class Script(scripts.Script):
 
-    # Check number is provided if mode=random
-    if args.mode == "random" and not args.number:
-        raise ValueError("`--number` is required when using `mode=random`")
+    """
+    Class for interfacing with AUTOMATIC1111's webui.
+    """
+    
+    def title(self) -> str:
+        return "Prompt forge"
 
-    generator = Generator.from_file(args.content_file)
-    prompts = generator.generate_prompts(args.number, mode=args.mode)
-    with args.output.open("w") as f:
-        f.write("\n".join(prompts))
-    # Warn if there are duplicates
-    n_uniques = len(set(prompts))
-    duplicates = len(prompts) - n_uniques
-    if duplicates > 0:
-        logger.warning(f"The generated prompts contain duplicates ({duplicates}/{len(prompts)})")
+    def show(self, is_txt2img: bool, is_img2img: bool) -> bool:
+        return is_txt2img or is_img2img
+
+    def ui(self) -> tuple[gr.Textbox, gr.Radio, gr.Number]:
+
+        def load_config_file(file: gr.File):
+            """
+            From https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/5ef669de080814067961f28357256e8fe27544f4/scripts/prompts_from_file.py#L96
+            FIXME: why 7?
+            """
+            if file is None:
+                return None, gr.update(), gr.update(lines=7)
+            else:
+                lines = file.decode('utf8', errors='ignore').splitlines()
+                return None, "\n".join(lines), gr.update(lines=7)
+
+        def switch_number_selector(mode_selector: gr.Radio, number_selector: gr.Number) -> None:
+            if mode_selector.value == "Random":
+                number_selector.visible = True
+            elif mode_selector.value == "Exhaustive":
+                number_selector.visible = False
+            else:
+                errors.report(f"Got unexpected generation mode {mode_selector.value!r}")
+
+        configuration = gr.Textbox(
+            label="Configuration",
+
+            elem_id=self.elem_id("prompt_txt"),
+        )
+        configuration_file = gr.File(
+            label="Configuration file",
+            info="See project's README for syntax definition",
+            file_types=[".toml"],
+            type="binary",
+            elem_id=self.elem_id("configuration_file"),
+        )
+        generation_type = gr.Radio(
+            label="Mode",
+            info=(
+                "Random will create a number of prompts randomly picked from the configuration, "
+                "exhaustive will generate all possible combinations."
+            ),
+            choices=["Random", "Exhaustive"],
+        )
+        number_of_entries = gr.Number(
+            label="Number of random prompts to generate",
+            precision=0,
+            minimum=0,
+        )
+        warn_if_duplicates = gr.Checkbox(
+            label="Warn when there are duplicate prompts",
+            info="Note: can only happen when using mode 'Random'",
+            value=True,
+        )
+
+        # Push configuration file's content into the textbox
+        configuration_file.change(fn=load_config_file, inputs=[configuration_file], outputs=[configuration_file, configuration, configuration], show_progress=False)
+        # Listen to changes on the mode selector, and enable/disable the entries
+        # selector depending on the value
+        generation_type.change(switch_number_selector, inputs=[generation_type, number_of_entries])
+
+        return configuration, generation_type, number_of_entries, warn_if_duplicates
+
+    def run(
+            self,
+            p: StableDiffusionProcessing,
+            configuration: gr.Textbox,
+            generation_type: gr.Radio,
+            number_of_entries: gr.Number,
+            duplicates_warning: gr.Checkbox,
+        ):
+        """
+        Parts of this function are from script
+        [prompts_from_file](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/master/scripts/prompts_from_file.py)
+        (https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/5ef669de080814067961f28357256e8fe27544f4/scripts/prompts_from_file.py).
+        """
+        generator: Generator = Generator.from_string(configuration)
+
+        if generation_type == "Random":
+            lines = generator.generate_random_prompts(number_of_entries)
+        elif generation_type == "Exhaustive":
+            lines = generator.generate_exhaustive_prompts()
+        else:
+            errors.report(f"Invalid generation type {generation_type!r}")
+
+        if duplicates_warning:
+            n_uniques = len(set(lines))
+            duplicates = len(lines) - n_uniques
+            if duplicates > 0:
+                errors.report(f"The generated prompts contain duplicates ({duplicates}/{len(lines)})")
+
+        p.do_not_save_grid = True
+
+        job_count = 0
+        jobs = []
+
+        for line in lines:
+            if "--" in line:
+                try:
+                    args = cmdargs(line)
+                except Exception:
+                    errors.report(f"Error parsing line {line} as commandline", exc_info=True)
+                    args = {"prompt": line}
+            else:
+                args = {"prompt": line}
+
+            job_count += args.get("n_iter", p.n_iter)
+
+            jobs.append(args)
+
+        print(f"Will process {len(lines)} lines in {job_count} jobs.")
+        if p.seed == -1:
+            p.seed = int(random.randrange(4294967294))
+
+        state.job_count = job_count
+
+        images = []
+        all_prompts = []
+        infotexts = []
+        for args in jobs:
+            state.job = f"{state.job_no + 1} out of {state.job_count}"
+
+            copy_p = copy.copy(p)
+            for k, v in args.items():
+                setattr(copy_p, k, v)
+
+            proc = process_images(copy_p)
+            images += proc.images
+
+            all_prompts += proc.all_prompts
+            infotexts += proc.infotexts
+
+        return Processed(p, images, p.seed, "", all_prompts=all_prompts, infotexts=infotexts)
