@@ -112,39 +112,6 @@ With this setup in place, it is not possible to get the prompt `heels, vest, jea
 
 Also, note that their position within the configuration file has no impact.
 
-#### Generation parameters
-
-Just like the built-in script [prompt_from_file](https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/master/scripts/prompts_from_file.py), it is possible to specify the generation parameters within the configuration. For example:
-
-```toml
-# Use SDXL or SD1.5
-[blocks.model]
-candidates = [
-    "model: [dXL_v10VAEFix | sd-v1-5-inpainting]"
-]
-
-# Use one of these three seeds
-[blocks.seed]
-candidates = ["seed: [1 | 2 | 3]"]
-
-[blocks.prompt-declaration]
-# Here, since we split the prompt candidates in parts below,
-# we declare the prefix in its separate block
-candidates = ["prompt:"]
-
-[blocks.subject]
-candidates = [
-    "businessman",
-    "college student",
-]
-
-[blocks.scene]
-candidates = [
-    "in the nyc metro",
-    "at the gym",
-]
-```
-
 #### Weighting
 
 To customize the probabilistic weighting of keywords:
