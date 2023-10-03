@@ -1,6 +1,12 @@
 import sys
 
-import launch
+try:
+    from launch import run_pip
+except ImportError:
+    import subprocess
+    def run_pip(command: str, message: str):
+        subprocess.check_call([sys.executable, "-m", "pip", command])
+        print(message)
 
 packages = {
     ("jsonschema", True),
@@ -11,7 +17,7 @@ packages = {
 for package, required in packages:
     if required:
         try:
-            launch.run_pip(f"install -U {package}", f"sd-webui-prompt-forge requirement: {package}")
+            run_pip(f"install -U {package}", f"sd-webui-prompt-forge requirement: {package}")
         except Exception as e:
             print(e)
             print(f"Failed to install {package}, script prompt-forge might not work")
