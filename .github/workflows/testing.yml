@@ -39,5 +39,4 @@ jobs:
         name: 'Install testing dependencies'
       - shell: bash
         run: pytest
-        working-directory: ${{ runner.temp }}
         name: 'Run tests'
