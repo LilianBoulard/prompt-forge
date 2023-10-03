@@ -1,13 +1,6 @@
 import sys
 
-try:
-    from launch import run_pip
-except ImportError:
-    import subprocess
-    def run_pip(command: str, message: str):
-        command_parts = command.split()
-        subprocess.check_call([sys.executable, "-m", "pip"] + command_parts)
-        print(message)
+from launch import run_pip
 
 packages = {
     ("jsonschema", True),
