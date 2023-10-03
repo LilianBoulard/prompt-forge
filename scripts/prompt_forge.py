@@ -88,6 +88,108 @@ def groups_in_group(group: Group | ExclusionGroup) -> list[Group | ExclusionGrou
     return set(groups)
 
 
+def parse_candidate(candidate: str) -> list:
+    """
+    Takes the string representation of a candidate,
+    and converts it to a tree-style structure, which
+    can be further processed.
+
+    Parameters
+    ----------
+    candidate: str
+        The candidate keyword.
+        E.g. "[[pristine | ] red] Ford Mustang | [sports | ] Porsche 911"
+
+    Returns
+    -------
+    nested list of str
+        The tree-style representation of the candidate.
+        E.g. [[[[['pristine', ''], 'red']], 'Ford Mustang'], [['sports', ''], 'Porsche 911']]
+    """
+    # Since we strip a lot, we will explicitly add spaces around
+    # the pipes, otherwise the splitting method use down below
+    # might not work (it wouldn't find the empty string).
+    # E.g. `an| example|` -> `an | example | `.
+    candidate = re.sub(r"(\s{0,1})\|(\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
+
+    # First pass: split based on the pipes
+    split_parts = []
+    buffer = []
+    nesting_level = 0
+    for c in candidate:
+        if c == "[":
+            nesting_level += 1
+        elif c == "]":
+            nesting_level -= 1
+
+        buffer.append(c)
+
+        if c == "|" and nesting_level == 0:
+            split_parts.append("".join(buffer[:-1]).strip())
+            buffer.clear()
+
+    if buffer:
+        split_parts.append("".join(buffer).strip())
+        buffer.clear()
+
+    # Second pass: isolate nested values
+    isolated_parts: list[str | list[str]] = []
+    buffer = []
+    nesting_level = 0
+    for part in split_parts:
+        nested_parts_buffer: list[str] = []
+        if part == "":
+            isolated_parts.append(part)
+            continue
+        if "[" in part:
+            # There are nested values.
+            # If there is a value besides (e.g. `car` in `[sports | ] car`),
+            # then we must keep them together (they form a single group)
+            # so we'll nest them.
+            for c in part:
+                if c == "[":
+                    nesting_level += 1
+                    if nesting_level == 1:
+                        if buffer:
+                            nested_parts_buffer.append("".join(buffer).strip())
+                            buffer.clear()
+                        continue
+                elif c == "]":
+                    nesting_level -= 1
+                    if nesting_level == 0:
+                        if buffer:
+                            nested_parts_buffer.append("".join(buffer).strip())
+                            buffer.clear()
+                        continue
+                buffer.append(c)
+            if buffer:
+                nested_parts_buffer.append("".join(buffer).strip())
+                buffer.clear()
+            isolated_parts.append(nested_parts_buffer)
+        else:
+            # The part does not have a nested value
+            isolated_parts.append(part)
+
+    # Third pass: call recursively and collect the results
+    parsed_parts = []
+    for part in isolated_parts:
+        if isinstance(part, str):
+            if "|" in part:
+                parsed_parts.append(parse_candidate(part))
+            else:
+                parsed_parts.append(part)
+        elif isinstance(part, list):
+            nested_part_parts = []
+            for nested_part in part:
+                if "|" in nested_part or "[" in nested_part:
+                    nested_part_parts.append(parse_candidate(nested_part))
+                else:
+                    nested_part_parts.append(nested_part)
+            parsed_parts.append(nested_part_parts)
+
+    return parsed_parts
+
+
 class Candidate:
 
     """
@@ -301,7 +403,7 @@ class Block:
             # Avoids unexpected prompts
             if not is_balanced(candidate):
                 raise ValueError(f"Unbalanced brackets in {candidate!r}")
-            candidate_repr = self._construct_parts(candidate)
+            candidate_repr = parse_candidate(candidate)
             candidate_tree = build_candidate_tree(candidate_repr)
             candidates.append(candidate_tree)
 
@@ -359,107 +461,6 @@ class Block:
                 k=min(random.choice(self.num), len(self.keywords)),
             )
         )
-
-    def _construct_parts(self, candidate: str) -> list:
-        """
-        Takes the string representation of a candidate,
-        and converts it to a tree-style structure, which
-        can be further processed.
-
-        Parameters
-        ----------
-        candidate: str
-            The candidate keyword.
-            E.g. "[[pristine | ] red] Ford Mustang | [sports | ] Porsche 911"
-
-        Returns
-        -------
-        nested list of str
-            The tree-style representation of the candidate.
-            E.g. [[[[['pristine', ''], 'red']], 'Ford Mustang'], [['sports', ''], 'Porsche 911']]
-        """
-        # Since we strip a lot, we will explicitly add spaces around
-        # the pipes, otherwise the splitting method use down below
-        # might not work (it wouldn't find the empty string).
-        # E.g. `an| example|` -> `an | example | `.
-        candidate = re.sub(r"(\s{0,1})\|(\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
-
-        # First pass: split based on the pipes
-        split_parts = []
-        buffer = []
-        nesting_level = 0
-        for c in candidate:
-            if c == "[":
-                nesting_level += 1
-            elif c == "]":
-                nesting_level -= 1
-
-            buffer.append(c)
-
-            if c == "|" and nesting_level == 0:
-                split_parts.append("".join(buffer[:-1]).strip())
-                buffer.clear()
-
-        if buffer:
-            split_parts.append("".join(buffer).strip())
-            buffer.clear()
-
-        # Second pass: isolate nested values
-        isolated_parts: list[str | list[str]] = []
-        buffer = []
-        nesting_level = 0
-        for part in split_parts:
-            nested_parts_buffer: list[str] = []
-            if part == "":
-                isolated_parts.append(part)
-                continue
-            if "[" in part:
-                # There are nested values.
-                # If there is a value besides (e.g. `car` in `[sports | ] car`),
-                # then we must keep them together (they form a single group)
-                # so we'll nest them.
-                for c in part:
-                    if c == "[":
-                        nesting_level += 1
-                        if nesting_level == 1:
-                            if buffer:
-                                nested_parts_buffer.append("".join(buffer).strip())
-                                buffer.clear()
-                            continue
-                    elif c == "]":
-                        nesting_level -= 1
-                        if nesting_level == 0:
-                            if buffer:
-                                nested_parts_buffer.append("".join(buffer).strip())
-                                buffer.clear()
-                            continue
-                    buffer.append(c)
-                if buffer:
-                    nested_parts_buffer.append("".join(buffer).strip())
-                    buffer.clear()
-                isolated_parts.append(nested_parts_buffer)
-            else:
-                # The part does not have a nested value
-                isolated_parts.append(part)
-
-        # Third pass: call recursively and collect the results
-        parsed_parts = []
-        for part in isolated_parts:
-            if isinstance(part, str):
-                if "|" in part:
-                    parsed_parts.append(self._construct_parts(part))
-                else:
-                    parsed_parts.append(part)
-            elif isinstance(part, list):
-                nested_part_parts = []
-                for nested_part in part:
-                    if "|" in nested_part or "[" in nested_part:
-                        nested_part_parts.append(self._construct_parts(nested_part))
-                    else:
-                        nested_part_parts.append(nested_part)
-                parsed_parts.append(nested_part_parts)
-
-        return parsed_parts
 
 
 class Generator:
