@@ -474,6 +474,11 @@ class Generator:
         self.blocks_order = blocks_order
 
     @classmethod
+    def from_file(cls, file: Path) -> Generator:
+        with file.open() as f:
+            return cls.from_string(f.read())
+
+    @classmethod
     def from_string(cls, configuration: str) -> Generator:
         # Parse the config
         config = tomllib.loads(configuration)
