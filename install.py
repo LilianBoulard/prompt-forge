@@ -5,7 +5,8 @@ try:
 except ImportError:
     import subprocess
     def run_pip(command: str, message: str):
-        subprocess.check_call([sys.executable, "-m", "pip", command])
+        command_parts = command.split()
+        subprocess.check_call([sys.executable, "-m", "pip"] + command_parts)
         print(message)
 
 packages = {
