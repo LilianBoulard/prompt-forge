@@ -252,7 +252,7 @@ class Candidate:
                     continue
                 # FIXME: weighting is incorrect
                 keywords, weights = zip(*elements)
-                joined_keywords.append((" ".join(keywords), sum(weights)))
+                joined_keywords.append((" ".join(keywords), min(weights)))
             return joined_keywords
 
         elif self.operator == "OR":
