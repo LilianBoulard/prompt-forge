@@ -16,7 +16,6 @@ candidates = [
 ]
 
 [blocks.scene]
-optional = true
 candidates = [
     "on the (busy) highway",
     "in the desert",
@@ -34,7 +33,6 @@ candidates = [
 ]
 
 [blocks.image-details]
-optional = true
 candidates = [
     "realistic",
     "highly detailed",
