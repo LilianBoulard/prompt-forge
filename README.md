@@ -6,7 +6,7 @@ It is an extension designed for [AUTOMATIC1111's Stable Diffusion Webui](https:/
 
 ## Install
 
-Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge).
+Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge). Finally, click `Install`, reload the UI and you're ready to roll!
 
 ## The configuration file
 
