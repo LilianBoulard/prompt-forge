@@ -121,7 +121,7 @@ members = ["blocks.clothing-ensemble", "groups.clothing"]
 
 With this setup in place, it is not possible to get the prompt `heels, vest, jeans, dress`.
 
-Also, note that their position within the configuration file has no impact.
+Also, note that the groups' position within the configuration file is unimportant.
 
 #### Weighting
 
