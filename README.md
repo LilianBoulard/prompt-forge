@@ -66,8 +66,8 @@ Both of those can be nested without restriction (e.g., `(1970 | 1980 | 1990) [((
 #### Blocks parameters
 
 Blocks support the following parameters for customizing their behavior:
-- `force` - This boolean parameter indicates that a keyword extracted from each candidate in the block will be included in the prompt. Incompatible with other parameters.
-- `num` - This parameter takes either a positive number (e.g., `num=2`) or a range of two positive numbers (e.g., `num=1-3`). It indicates the number of candidates that will be randomly selected within the block to generate one keyword each. If unspecified, the default value is `1` (only one keyword will be selected in the block).
+- `force` - This boolean parameter indicates that a keyword extracted from each candidate in the block will be included in the prompt. Shorthand of `num=<number of candidates>`.
+- `num` - This parameter takes either a positive number (e.g., `num=2`) or a range of two positive numbers (e.g., `num=1-3`). It indicates the number of candidates that will be randomly selected within the block to generate one keyword each. If unspecified, the default value is `1` (only one candidate will be selected in the block to generate a keyword).
 - `separator` - Takes a string, which will be used as the separator between entries chosen within the block (when `num`>1). By default, `", "`.
 - `optional` - Boolean parameter, when `true`, shorthand for `num=0-1`, meaning: choose one keyword in the block, or none.
 - `weighting` - See section `Weighting` below.
@@ -119,7 +119,7 @@ To customize the probabilistic weighting of keywords:
 ##### Blocks
 
 Blocks support the parameter `weighting`, for which there are three possible values:
-- `candidate-shallow` - The initial probability is spread accross the candidates, then between the options ; with each new nesting layer, the probability spread (thus is lower and lower with each one).
+- `candidate-shallow` - The initial probability is spread accross the candidates, then between the options ; with each new nesting layer, the probability is spread (thus is lower and lower with each one).
 - `candidate-deep` (default) - The initial probability is speach accross the candidates, then spread accross all possibilities.
 - `keyword` - The probability is spread accross all keywords, so each one has an equal chance of being picked.
 
@@ -128,7 +128,10 @@ For example, with this configuration block:
 ```toml
 [blocks.example]
 weighting = "..."
-candidates = ["[[large | small] | beautiful] car", "van"]
+candidates = [
+    "[[large | small] | beautiful] car",
+    "van",
+]
 ```
 
 here's the probability distribution depending on the weighting:

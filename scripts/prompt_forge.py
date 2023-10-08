@@ -38,18 +38,6 @@ def is_balanced(parens: str) -> bool:
     return not stack
 
 
-def build_candidate_tree(candidate_part: list | str) -> Candidate:
-    if isinstance(candidate_part, list):
-        node = Candidate()  # Create dummy
-        # Add children
-        for item in candidate_part:
-            node.children.append(build_candidate_tree(item))
-    else:
-        # Create leaf
-        node = Candidate(candidate_part)
-    return node
-
-
 def blocks_in_group(element: Block | Group | ExclusionGroup) -> set[Block]:
     """
     Given an element, lists the blocks it is constituted of.
@@ -88,64 +76,89 @@ def groups_in_group(group: Group | ExclusionGroup) -> list[Group | ExclusionGrou
     return set(groups)
 
 
-def parse_candidate(candidate: str) -> list:
+class Candidate:
+
     """
-    Takes the string representation of a candidate,
-    and converts it to a tree-style structure, which
-    can be further processed.
-
-    Parameters
-    ----------
-    candidate: str
-        The candidate keyword.
-        E.g. "[[pristine | ] red] Ford Mustang | [sports | ] Porsche 911"
-
-    Returns
-    -------
-    nested list of str
-        The tree-style representation of the candidate.
-        E.g. [[[[['pristine', ''], 'red']], 'Ford Mustang'], [['sports', ''], 'Porsche 911']]
+    A candidate node (used in a tree) either has a value
+    (it's a leaf) or a list of children (it's a dummy).
     """
-    # Since we strip a lot, we will explicitly add spaces around
-    # the pipes, otherwise the splitting method use down below
-    # might not work (it wouldn't find the empty string).
-    # E.g. `an| example|` -> `an | example | `.
-    candidate = re.sub(r"(\s{0,1})\|(\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
 
-    # First pass: split based on the pipes
-    split_parts = []
-    buffer = []
-    nesting_level = 0
-    for c in candidate:
-        if c == "[":
-            nesting_level += 1
-        elif c == "]":
-            nesting_level -= 1
+    def __init__(self, *, keyword: str | None = None, children: list | None = None, operator: Literal["OR", "AND"] | None = None):
+        self.value = keyword
+        self.children = children
+        self.operator = operator
 
-        buffer.append(c)
+    def __len__(self) -> int:
+        if self.value is not None:
+            return 1
+        else:
+            return sum(len(child) for child in self.children)
 
-        if c == "|" and nesting_level == 0:
-            split_parts.append("".join(buffer[:-1]).strip())
+    @classmethod
+    def parse(cls, candidate: str) -> Candidate:
+        """
+        Takes the string representation of a candidate,
+        and converts it to a tree-style structure, which
+        can be further processed.
+
+        Parameters
+        ----------
+        candidate: str
+            The candidate keyword.
+
+        Returns
+        -------
+        Candidate
+            The tree representation of the candidate.
+        """
+        if not is_balanced(candidate):
+            raise ValueError(f"Candidate {candidate!r} has unbalanced brackets/parentheses")
+
+        candidate = candidate.replace("(", "[").replace(")", " | ]")
+
+        # We will explicitly add spaces around
+        # the pipes and the brackets, otherwise the splitting method
+        # used down below might not work (it wouldn't find the empty string).
+        # E.g. `a| [simple| example]|` -> `a | [ simple | example] | `.
+        candidate = re.sub(r"(\s{0,1})\|(\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
+        candidate = re.sub(r"(\s{0,1})\[(\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
+        candidate = re.sub(r"(\s{0,1})\](\s{0,1})", lambda x: f" {x.group(0).strip()} ", candidate)
+
+        return cls._parse(candidate)
+
+    @classmethod
+    def _parse(cls, candidate: str) -> Candidate:
+        # First pass: split based on the pipes
+        # (only on the first nesting layer,
+        # we'll delegate the nested ones to recursive calls)
+        split_parts = []
+        buffer = []
+        nesting_level = 0
+        for c in candidate:
+            if c == "[":
+                nesting_level += 1
+            elif c == "]":
+                nesting_level -= 1
+
+            buffer.append(c)
+
+            if c == "|" and nesting_level == 0:
+                split_parts.append("".join(buffer[:-1]).strip())
+                buffer.clear()
+
+        if buffer:
+            split_parts.append("".join(buffer).strip())
             buffer.clear()
 
-    if buffer:
-        split_parts.append("".join(buffer).strip())
-        buffer.clear()
-
-    # Second pass: isolate nested values
-    isolated_parts: list[str | list[str]] = []
-    buffer = []
-    nesting_level = 0
-    for part in split_parts:
-        nested_parts_buffer: list[str] = []
-        if part == "":
-            isolated_parts.append(part)
-            continue
-        if "[" in part:
-            # There are nested values.
-            # If there is a value besides (e.g. `car` in `[sports | ] car`),
-            # then we must keep them together (they form a single group)
-            # so we'll nest them.
+        # Second pass: isolate nested values
+        isolated_parts: list[list[str]] = []
+        buffer = []
+        nesting_level = 0
+        for part in split_parts:
+            nested_parts_buffer: list[str] = []
+            if part == "":
+                isolated_parts.append(part)
+                continue
             for c in part:
                 if c == "[":
                     nesting_level += 1
@@ -166,103 +179,95 @@ def parse_candidate(candidate: str) -> list:
                 nested_parts_buffer.append("".join(buffer).strip())
                 buffer.clear()
             isolated_parts.append(nested_parts_buffer)
-        else:
-            # The part does not have a nested value
-            isolated_parts.append(part)
 
-    # Third pass: call recursively and collect the results
-    parsed_parts = []
-    for part in isolated_parts:
-        if isinstance(part, str):
-            if "|" in part:
-                parsed_parts.append(parse_candidate(part))
-            else:
-                parsed_parts.append(part)
-        elif isinstance(part, list):
-            nested_part_parts = []
+        # Third pass: call recursively and collect the results
+        children: list[Candidate] = []
+        for part in isolated_parts:
+            inner_buffer: list[Candidate] = []
             for nested_part in part:
                 if "|" in nested_part or "[" in nested_part:
-                    nested_part_parts.append(parse_candidate(nested_part))
+                    inner_buffer.append(cls.parse(nested_part))
                 else:
-                    nested_part_parts.append(nested_part)
-            parsed_parts.append(nested_part_parts)
+                    inner_buffer.append(cls(keyword=nested_part))
+            if len(inner_buffer) == 1:
+                children.append(inner_buffer[0])
+            else:
+                children.append(cls(children=inner_buffer, operator="AND"))
 
-    return parsed_parts
+        return cls(children=children, operator="OR")
 
-
-class Candidate:
-
-    """
-    A candidate node (used in a tree) either has a value
-    (it's a leaf) or a list of children (it's a dummy).
-    """
-
-    def __init__(self, keyword: str | None = None):
-        self.value = keyword
-        self.children: list[Candidate] = []
-    
-    def __repr__(self) -> list:
-        if self.value is not None:
-            return str(self.value)
-        return f"{[repr(child) for child in self.children]}"
-
-    def expand(self) -> str | list[str]:
+    def expand(self, *, weighting: Literal["candidate-shallow", "candidate-deep", "keyword"]) -> list[tuple[str, int]]:
         """
         Expands the tree to enumerate all keywords.
 
+        Parameters
+        ----------
+        weighting: {"candidate-shallow", "candidate-deep", "keyword"}
+            Weighting system to use for this candidate (inherited from the block).
+            Refer to the README for more information.
+
         Returns
         -------
-        str
-            If the candidate is a leaf, returns its value.
-        list[str]
-            The list of all keywords.
+        list of 2-tuples of str and int
+            All keywords that can be picked from this candidate,
+            along with the individual's weight.
         """
         if (
-            (self.value is not None and self.children)
-            or (self.value is None and not self.children)
+            (self.value is not None and self.children and self.operator)
+            or (self.value is None and not self.children and not self.operator)
         ):
             raise ValueError(
-                "Candidate must either be a leaf "
-                "(have a value) or a dummy (has children). " 
-                f"Has both: {self.value=}, {self.children=}"
+                f"Candidate must either be a leaf "
+                f"(have a value) or a dummy (have children and an operator). " 
+                f"Has an incorrect combination: {self.value=}, "
+                f"{self.children=}, {self.operator=}"
             )
 
-        # If it's a leaf, return its value
+        # If it's a leaf, return its value with a single unit of weight
         if self.value is not None:
-            return self.value
+            return [(self.value, 1)]
 
-        # First pass: we append everything to a single list.
-        # e.g. ["a", "b", ["c", "d"], "e"]
-        prompt_parts: list[str] = [
-            child.expand()
+        children_and_op: list[tuple[list[tuple[str, int]], Literal["OR", "AND"]]] = [
+            # If it's a leaf, it won't have an operator,
+            # so we default to AND
+            (child.expand(weighting=weighting), child.operator or "AND")
             for child in self.children
         ]
 
-        # Second pass: we put continuously single values
-        # in lists.
-        # We leave the already existing lists alone.
-        # e.g. [["a", "b"], ["c", "d"], ["e"]]
-        temp_prompts: list[str] = []
-        buffer = []
-        for prompt_part in prompt_parts:
-            if isinstance(prompt_part, str):
-                buffer.append(prompt_part)
-            elif isinstance(prompt_part, list):
-                # Bundle previous values together
-                if buffer:
-                    temp_prompts.append(buffer.copy())
-                    buffer.clear()
-                # Store this one
-                temp_prompts.append(prompt_part)
-        if buffer:
-            temp_prompts.append(buffer.copy())
+        if self.operator == "AND":
+            # Explode AND lists with multiple elements.
+            # Keep OR lists nested.
+            # TODO: take care of the weights
+            product_candidates = []
+            for keywords, operator in children_and_op:
+                if operator == "AND":
+                    for item, weight in keywords:
+                        product_candidates.append([(item, weight)])
+                else:
+                    product_candidates.append(keywords)
+            prod = list(product(*product_candidates))
+            joined_keywords = []
+            for elements in prod:
+                # FIXME: weighting is incorrect
+                keywords, weights = zip(*elements)
+                joined_keywords.append((" ".join(keywords), sum(weights)))
+            return joined_keywords
 
-        # Finally, we do the final product
-        # e.g. ["a c e", "a d e", "b c e", "b d e"]       
-        return [
-            " ".join(pair).strip()
-            for pair in product(*temp_prompts)
-        ]
+
+        elif self.operator == "OR":
+            # Return everything together
+            if weighting == "candidate-shallow":
+                # Adjust the cumulative weights
+                raise NotImplementedError("`candidate-shallow` is not implemented yet")
+            elif weighting == "candidate-deep" or weighting == "keyword":
+                # Do not adjust the cumulative weights
+                or_val = [
+                    # weight is always 1
+                    (item, weight)
+                    for items, _ in children_and_op
+                    for item, weight in items
+                ]
+                return or_val
 
 
 class Group:
@@ -318,14 +323,8 @@ class Block:
     separator: str
         When picking multiple keywords from this block,
         the separator to use when joining them.
-    force: bool
-        Whether all keywords in this block should be included in the prompt.
-        Note: not all combinations, all keywords.
-    keywords: list of str
-        Exhaustive list of all keywords that can be picked from this block.
-    weights: list of int or None
-        Generated at init, specifies the weight of each keyword.
-        Can be None, in which case the weight is equal for each keyword.
+    candidates: mapping of str to list 2-tuples of str and int
+        The keywords for each candidate.
     weighting: {"candidate-shallow", "candidate-deep", "keyword"}
         How to tune probabilities when picking a keyword.
         Refer to the guide, section "Weighting" for more information.
@@ -334,133 +333,63 @@ class Block:
     name: str
     num: range
     separator: str
-    force: bool
-    keywords: list[str]
-    weights: list[int] | None
+    candidates: list[list[tuple[str, int]]]
     weighting: Literal["candidate-shallow", "candidate-deep", "keyword"]
 
     def __init__(self, name: str, candidates: list[str], parameters: dict[str, any]) -> Block:
         self.name = name
-        self.update_parameters(parameters)
-        self.keywords, self.weights = self._generate_keywords(candidates)
-
-    def __hash__(self):
-        return hash(self.name)
-    
-    def __repr__(self):
-        return f"Block {self.name!r} with {len(self.keywords)} keywords"
-
-    def update_parameters(self, parameters: dict[str, any]) -> None:
-        """
-        In-place method that takes a dictionary of parameters
-        and overrides the current values of the instance.
-
-        Parameters
-        ----------
-        parameters: dict of str to any value
-            The new parameters for the instance.
-            Unsupported parameters are ignored by this function.
-        """
-        self.num = range(1, 2)
-        if num_param := parameters.get("num"):
-            # Parses `2` as `(2, 2)` and `2-3` as `(2, 3)`
-            min_num, max_num = map(int, num_param.split("-")) if "-" in num_param else (int(num_param), int(num_param))
-            self.num = range(min_num, max_num + 1)
-        if parameters.get("optional"):
-            self.num = range(0, 2)
 
         self.weighting = parameters.get("weighting", "candidate-deep")
         assert self.weighting in {"candidate-shallow", "candidate-deep", "keyword"}
 
+        self.candidates = [
+            Candidate.parse(candidate).expand(weighting=self.weighting)
+            for candidate in candidates
+        ]
+
+        self.num = range(1, 2)
+        if parameters.get("force"):
+            self.num = range(len(self.candidates), len(self.candidates) + 1)
+        elif parameters.get("optional"):
+            self.num = range(0, 2)
+        elif num_param := parameters.get("num"):
+            # Parses `2` as `(2, 2)` and `2-3` as `(2, 3)`
+            min_num, max_num = map(int, num_param.split("-")) if "-" in num_param else (int(num_param), int(num_param))
+            self.num = range(min_num, max_num + 1)
+
         self.separator = parameters.get("separator", ", ")
 
-        self.force = parameters.get("force", False)
+    def __hash__(self):
+        return hash(self.name)
 
-    def _generate_keywords(self, keyword_candidates: list[str]) -> tuple[list[str], list[int] | None]:
-        """
-        Takes keyword candidates and expands them all,
-        returning an exhaustive list of all keywords
-        that can be picked from the block, and their weights.
-
-        Parameters
-        ----------
-        keyword_candidates: list of str
-            Keyword candidates to expand
-
-        Returns
-        -------
-        2-tuple of a list of str and a list of int
-            The first list is the exhaustive list of keywords.
-            The second one contains the weights for the choice of a parameter.
-        """
-        # Preliminary pass:
-        # 1. Clean up
-        # 2. Check validity
-        # 3. Convert to candidate tree
-        candidates: list[Candidate] = []
-        for candidate in keyword_candidates:
-            candidate = candidate.replace("(", "[").replace(")", " | ]")
-            # Avoids unexpected prompts
-            if not is_balanced(candidate):
-                raise ValueError(f"Unbalanced brackets in {candidate!r}")
-            candidate_repr = parse_candidate(candidate)
-            candidate_tree = build_candidate_tree(candidate_repr)
-            candidates.append(candidate_tree)
-
-        if self.weighting == "candidate-shallow":
-            # TODO
-            raise NotImplementedError("`candidate-shallow` is not yet implemented")
-
-        elif self.weighting == "candidate-deep":
-            final_keywords: list[tuple[str, int]] = []
-            # First step: create the exhaustive list for the candidate
-            # Second step: divide the probas by the number of candidates
-            groups: dict[int, list[str]] = {}
-            for group, candidate in enumerate(candidates):
-                groups.update({group: candidate.expand()})
-            # Scale by the total number of entries
-            total_entries = sum(map(len, groups.values()))
-            for group, entries in groups.items():
-                weight = round(1 / len(entries) * total_entries)
-                final_keywords.extend([
-                    (entry, weight)
-                    for entry in entries
-                ])
-            return list(zip(*final_keywords))  # unzip
-
-        elif self.weighting == "keyword":
-            # Create the exhaustive list for the candidate,
-            # give an equal weight for each.
-            final_keywords_nested: list[list[str]] = [
-                candidate.expand()
-                for candidate in candidates
-            ]
-            # Flatten
-            final_keywords: list[str] = [
-                keyword
-                for nested_keywords in final_keywords_nested
-                for keyword in nested_keywords
-            ]
-            return final_keywords, None
-
-        else:
-            # FIXME: should be handled by the schema validation
-            raise ValueError(
-                f"Expected parameter weighting to be any of "
-                f"{{'candidate-shallow', 'candidate-deep', 'keyword'}}, "
-                f"got {self.weighting!r}. "
-            )
+    def __repr__(self):
+        return f"Block {self.name!r} with {len(self.keywords)} keywords"
 
     def generate_keyword(self) -> str:
-        return self.separator.join(
-            # FIXME: can choose multiple keywords from a same candidate,
-            # which is probably not the expected behavior
-            random.choices(
-                self.keywords,
-                self.weights,
-                k=min(random.choice(self.num), len(self.keywords)),
-            )
-        )
+        k = min(random.choice(self.num), len(self.candidates))
+        chosen_candidates: list[list[tuple[str, int]]]
+
+        if self.weighting in {"candidate-shallow", "candidate-deep"}:
+            chosen_candidates = random.choices(self.candidates, k=k)
+            return self.separator.join([
+                random.choices(*zip(*candidate))[0]
+                for candidate in chosen_candidates
+            ])
+
+        elif self.weighting == "keyword":
+            candidate_weights = [len(candidate) for candidate in self.candidates]
+            chosen_candidates = random.choices(self.candidates, weights=candidate_weights, k=k)
+
+    def generate_all_keywords(self) -> list[str]:
+        """
+        Used when mode="exhaustive", returns the list of
+        all possible keywords this block can generate.
+        """
+        return [
+            keyword
+            for candidate_keywords in self.candidates
+            for keyword, _ in candidate_keywords
+        ]
 
 
 class Generator:
