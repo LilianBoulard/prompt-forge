@@ -16,8 +16,7 @@ from modules import errors
 from modules.processing import (Processed, StableDiffusionProcessing,
                                 process_images)
 from modules.shared import state
-from prompt_forge import Generator
-
+from scripts.prompt_forge import Generator
 from scripts.prompts_from_file import cmdargs
 
 
