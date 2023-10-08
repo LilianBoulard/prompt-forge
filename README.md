@@ -1,10 +1,15 @@
 # Stable Diffusion prompt forge
 
-This script aims to automate prompt generation for Stable Diffusion.
+This script aims to automate prompt generation for Stable Diffusion (and more generally, txt2img models such as MidJourney, Dall-E, etc.).
 
-It is an extension designed for [AUTOMATIC1111's Stable Diffusion Webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui).
+It is an extension designed for [AUTOMATIC1111's Stable Diffusion webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui),
+but is also available as a standalone script.
+
+If you like the project, :star: it on Github, and share it to your SD friends!
 
 ## Install
+
+### AUTOMATIC1111 stable diffusion webui
 
 Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge). Finally, click `Install`, reload the UI and you're ready to roll!
 
@@ -33,7 +38,7 @@ Let's continue with a concrete example of the system in action. Given the follow
 [blocks.scene]
 candidates = [
     "dancing folks",
-    "inhabitants having lunch",
+    "people having lunch",
 ]
 
 [blocks.place]
