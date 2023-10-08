@@ -323,7 +323,7 @@ class Block:
     separator: str
         When picking multiple keywords from this block,
         the separator to use when joining them.
-    candidates: mapping of str to list 2-tuples of str and int
+    candidates: list of list of 2-tuples of str and int
         The keywords for each candidate.
     weighting: {"candidate-shallow", "candidate-deep", "keyword"}
         How to tune probabilities when picking a keyword.
