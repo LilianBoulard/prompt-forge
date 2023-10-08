@@ -150,7 +150,7 @@ The higher the number (weight), the higher the probability of the block/group be
 
 ```toml
 [exclusions.example]
-members = [blocks.my-block, groups.my-group]
+members = ["blocks.my-block", "groups.my-group"]
 weights = [1, 2]
 # `groups.my-group` will be chosen twice as much as `blocks.my-block`.
 # The numbers don't really matter, only the ratio does.
