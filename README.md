@@ -7,11 +7,15 @@ but is also available as a standalone script.
 
 If you like the project, :star: it on Github, and share it to your SD friends!
 
+<hr>
+
 ## Install
 
 ### AUTOMATIC1111 stable diffusion webui
 
 Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge). Finally, click `Install`, reload the UI and you're ready to roll!
+
+<hr>
 
 ## The configuration file
 
@@ -53,6 +57,8 @@ inhabitants having lunch, on a plaza
 ```
 
 **That's it for the basics!**
+
+<hr>
 
 ### Advanced usage
 
