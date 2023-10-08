@@ -248,11 +248,12 @@ class Candidate:
             prod = list(product(*product_candidates))
             joined_keywords = []
             for elements in prod:
+                if not elements:  # empty
+                    continue
                 # FIXME: weighting is incorrect
                 keywords, weights = zip(*elements)
                 joined_keywords.append((" ".join(keywords), sum(weights)))
             return joined_keywords
-
 
         elif self.operator == "OR":
             # Return everything together
@@ -261,13 +262,12 @@ class Candidate:
                 raise NotImplementedError("`candidate-shallow` is not implemented yet")
             elif weighting == "candidate-deep" or weighting == "keyword":
                 # Do not adjust the cumulative weights
-                or_val = [
+                return [
                     # weight is always 1
                     (item, weight)
                     for items, _ in children_and_op
                     for item, weight in items
                 ]
-                return or_val
 
 
 class Group:
