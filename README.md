@@ -187,4 +187,4 @@ weights = [1, 2]
 
 | Project | its pros | prompt-forge pros |
 |---|---|---|
-| sd-dynamic-prompts | - Some creative features, out-of-scope of prompt-forge<br>  (i.e. magic prompt, attention grabber, I'm feeling lucky)<br>- More complex syntax<br>- More mature and with a larger community | - Designed for industrial-scale generation<br>- Though for people that already know what they want<br>- Simpler and more descriptive syntax<br>- Easier to version with git or alike since it's a single conf file |
+| [sd-dynamic-prompts](https://github.com/adieyal/sd-dynamic-prompts) | - Some creative features, out-of-scope of prompt-forge<br>  (i.e. magic prompt, attention grabber, I'm feeling lucky)<br>- More complex syntax<br>- More mature and with a larger community | - Designed for industrial-scale generation<br>- Though for people that already know what they want<br>- Simpler and more descriptive syntax<br>- Easier to version with git or alike since it's a single conf file |
