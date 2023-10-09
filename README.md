@@ -17,7 +17,7 @@ If you like the project, :star: it on Github, and share it to your SD friends!
     - [Advanced usage](#advanced-usage)
       - [Candidates syntax](#candidates-syntax)
       - [Blocks parameters](#blocks-parameters)
-      - [Groups and exlusions](#groups-and-exlusions)
+      - [Groups and exclusions](#groups-and-exclusions)
       - [Weighting](#weighting)
         - [Blocks](#blocks)
         - [Exclusion groups](#exclusion-groups)
@@ -98,7 +98,7 @@ Blocks support the following parameters for customizing their behavior:
 - `optional` - Boolean parameter, when `true`, shorthand for `num=0-1`, meaning: choose one keyword in the block, or none.
 - `weighting` - See section `Weighting` below.
 
-#### Groups and exlusions
+#### Groups and exclusions
 
 For better organizational control, two systems are available:
 
