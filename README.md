@@ -21,6 +21,7 @@ If you like the project, :star: it on Github, and share it to your SD friends!
       - [Weighting](#weighting)
         - [Blocks](#blocks)
         - [Exclusion groups](#exclusion-groups)
+  - [Similar projects](#similar-projects)
 
 <hr>
 
@@ -181,3 +182,9 @@ weights = [1, 2]
 # `groups.my-group` will be chosen twice as much as `blocks.my-block`.
 # The numbers don't really matter, only the ratio does.
 ```
+
+## Similar projects
+
+| Project | its pros | prompt-forge pros |
+|---|---|---|
+| sd-dynamic-prompts | - Some creative features, out-of-scope of prompt-forge<br>  (i.e. magic prompt, attention grabber, I'm feeling lucky)<br>- More complex syntax<br>- More mature and with a larger community | - Designed for industrial-scale generation<br>- Though for people that already know what they want<br>- Simpler and more descriptive syntax<br>- Easier to version with git or alike since it's a single conf file |
