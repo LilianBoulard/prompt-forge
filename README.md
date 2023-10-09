@@ -9,6 +9,21 @@ If you like the project, :star: it on Github, and share it to your SD friends!
 
 <hr>
 
+- [Stable Diffusion prompt forge](#stable-diffusion-prompt-forge)
+  - [Install](#install)
+    - [AUTOMATIC1111 stable diffusion webui](#automatic1111-stable-diffusion-webui)
+  - [The configuration file](#the-configuration-file)
+    - [Basic usage](#basic-usage)
+    - [Advanced usage](#advanced-usage)
+      - [Candidates syntax](#candidates-syntax)
+      - [Blocks parameters](#blocks-parameters)
+      - [Groups and exlusions](#groups-and-exlusions)
+      - [Weighting](#weighting)
+        - [Blocks](#blocks)
+        - [Exclusion groups](#exclusion-groups)
+
+<hr>
+
 ## Install
 
 ### AUTOMATIC1111 stable diffusion webui
