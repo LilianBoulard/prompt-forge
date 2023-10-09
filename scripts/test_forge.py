@@ -2,7 +2,7 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-from prompt_forge import Generator, Candidate, Block
+from prompt_forge import Generator, Candidate
 
 
 def test_config_parsing():
@@ -25,7 +25,8 @@ def test_parse_candidate():
     Tests that parsing a candidate returns the expected keywords.
     """
     test_candidates: list[tuple[str, tuple]] = [
-        ("[[large | small] | [beautiful | ugly]] car | van", ("large car", "small car", "beautiful car", "ugly car", "van")),
+        ("[[A | B] | [C | D]] E | F", ("A E", "B E", "C E", "D E", "F")),
+        ("[A | B] [[C | D | ] E F | (G) H]", ('A C E F', 'A D E F', 'A E F', 'A G H', 'A H', 'B C E F', 'B D E F', 'B E F', 'B G H', 'B H')),
     ]
     for candidate, expected_keywords in test_candidates:
         # Dump the weights, we'll test that in another unit
