@@ -154,7 +154,7 @@ here's the probability distribution depending on the weighting:
 | **"*small car*"** | 1/2 * 1/2 * 1/2 = 12.5% | 1/2 * 1/3 = 16.6% | 1/4 = 25% |
 | **"*beautiful car*"** | 1/2 * 1/2 = 25% | 1/2 * 1/3 = 16.6% | 1/4 = 25% |
 
-###### Exclusion groups
+##### Exclusion groups
 
 Exclusion groups support the parameter `weights`, which takes a list of integers. Its size must be equal to the size of `members`.
 The higher the number (weight), the higher the probability of the block/group being chosen. For example:
