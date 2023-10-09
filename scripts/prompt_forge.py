@@ -157,7 +157,7 @@ class Candidate:
         for part in split_parts:
             nested_parts_buffer: list[str] = []
             if part == "":
-                isolated_parts.append(part)
+                isolated_parts.append([part])
                 continue
             for c in part:
                 if c == "[":
@@ -248,11 +248,12 @@ class Candidate:
             prod = list(product(*product_candidates))
             joined_keywords = []
             for elements in prod:
-                if not elements:  # empty
-                    continue
                 # FIXME: weighting is incorrect
                 keywords, weights = zip(*elements)
-                joined_keywords.append((" ".join(keywords), min(weights)))
+                joined_keywords.append((
+                    " ".join(filter(lambda keyword: not not keyword, keywords)),
+                    min(weights),
+                ))
             return joined_keywords
 
         elif self.operator == "OR":
