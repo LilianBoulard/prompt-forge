@@ -12,6 +12,7 @@ If you like the project, :star: it on Github, and share it to your SD friends!
 - [Stable Diffusion prompt forge](#stable-diffusion-prompt-forge)
   - [Install](#install)
     - [AUTOMATIC1111 stable diffusion webui](#automatic1111-stable-diffusion-webui)
+  - [Demo](#demo)
   - [The configuration file](#the-configuration-file)
     - [Basic usage](#basic-usage)
     - [Advanced usage](#advanced-usage)
@@ -30,6 +31,12 @@ If you like the project, :star: it on Github, and share it to your SD friends!
 ### AUTOMATIC1111 stable diffusion webui
 
 Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge). Finally, click `Install`, reload the UI and you're ready to roll!
+
+<hr>
+
+## Demo
+
+[![prompt-forge demo, video available on YouTube](https://img.youtube.com/vi/SJBXHkra5Go/0.jpg)](https://www.youtube.com/watch?v=SJBXHkra5Go)
 
 <hr>
 
