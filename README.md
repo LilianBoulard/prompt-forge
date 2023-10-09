@@ -36,12 +36,7 @@ Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, the
 
 ## Demo
 
- <div class="video" style="border: 0px;">
-    <iframe style="display: block; margin: auto;" width="560" height="315"
-     src="https://www.youtube.com/embed/SJBXHkra5Go" frameborder="0"
-     allow="accelerometer; autoplay; clipboard-write;
-     encrypted-media; gyroscope; picture-in-picture" allowfullscreen
-    ></iframe></div>
+[![prompt-forge demo, video available on YouTube](https://markdown-videos-api.jorgenkh.no/url?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DSJBXHkra5Go)](https://www.youtube.com/watch?v=SJBXHkra5Go)
 
 <hr>
 
