@@ -273,6 +273,8 @@ class Candidate:
 
 class Group:
 
+    __namespace__ = "groups"
+
     def __init__(self, name: str, members: list[Block]):
         self.name = name
         self.members = members
@@ -285,6 +287,8 @@ class Group:
 
 
 class ExclusionGroup:
+
+    __namespace__ = "exclusions"
 
     def __init__(self, name: str, members: list[Block | Group], weights: list[int] | None):
         self.name = name
@@ -330,6 +334,8 @@ class Block:
         How to tune probabilities when picking a keyword.
         Refer to the guide, section "Weighting" for more information.
     """
+
+    __namespace__ = "blocks"
 
     name: str
     num: range
@@ -416,7 +422,7 @@ class Generator:
 
         # Since toml returns the config as an unordered JSON document,
         # we read the configuration to find the order of the blocks
-        pattern = re.compile(r"\[blocks\.(.+?)\]")
+        pattern = re.compile(r"\[" + Block.__namespace__ + r"\.(.+?)\]")
         blocks_order: dict[str, int] = {
             match.group(0): match.start()
             for match in pattern.finditer(configuration)
@@ -437,34 +443,34 @@ class Generator:
         # Create the blocks
         blocks = {
             Block(name, block.get("candidates", list()), block)
-            for name, block in config.get("blocks", {}).items()
+            for name, block in config.get(Block.__namespace__, {}).items()
         }
-        mappings = {f"blocks.{block.name}": block for block in blocks}
+        mappings = {f"{Block.__namespace__}.{block.name}": block for block in blocks}
 
         # Create the groups
         groups = [
             Group(
-                name,
-                [
+                name=name,
+                members=[
                     mappings[group_name]
                     for group_name in group.get("members", list())
                 ],
             )
-            for name, group in config.get("groups", {}).items()
+            for name, group in config.get(Group.__namespace__, {}).items()
         ]
-        mappings.update({f"groups.{group.name}": group for group in groups})
+        mappings.update({f"{Group.__namespace__}.{group.name}": group for group in groups})
 
         # Create the exclusion groups
         exclusion_groups = [
             ExclusionGroup(
-                name, 
-                [
+                name=name, 
+                members=[
                     mappings[member_name]
                     for member_name in group.get("members", list())
                 ],
-                group.get("weights"),
+                weights=group.get("weights"),
             )
-            for name, group in config.get("exclusions", {}).items()
+            for name, group in config.get(ExclusionGroup.__namespace__, {}).items()
         ]
 
         # List blocks that are present in at least one group
@@ -498,7 +504,7 @@ class Generator:
 
     def sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
         return min(
-            self.blocks_order[f"[blocks.{block.name}]"]
+            self.blocks_order[f"[{Block.__namespace__}.{block.name}]"]
             for block in blocks_in_group(element)
         )
 
