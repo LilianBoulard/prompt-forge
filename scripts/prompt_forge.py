@@ -38,7 +38,7 @@ def is_balanced(parens: str) -> bool:
     return not stack
 
 
-def blocks_in_group(element: Block | Group | ExclusionGroup) -> set[Block]:
+def blocks_in_element(element: Block | Group | ExclusionGroup) -> set[Block]:
     """
     Given an element, lists the blocks it is constituted of.
 
@@ -314,10 +314,10 @@ class Block:
     ----------
     name: str
         Name of the block.
-    parameters: mapping of str to str or bool
-        Parameters passed in the config.
     candidates: list of str
         Candidates (can contain square brackets and parentheses).
+    parameters: mapping of str to str or bool
+        Parameters passed in the config.
 
     Attributes
     ----------
@@ -370,7 +370,11 @@ class Block:
         return hash(self.name)
 
     def __repr__(self):
-        return f"Block {self.name!r} with {len(self.keywords)} keywords"
+        return (
+            f"Block {self.name!r} "
+            f"<{len(self.candidates)} candidates, "
+            f"{sum(len(keywords) for keywords in self.candidates)} keywords>"
+        )
 
     def generate_keyword(self) -> str:
         k = min(random.choice(self.num), len(self.candidates))
@@ -477,7 +481,7 @@ class Generator:
         used_blocks = {
             block
             for group in {*groups, *exclusion_groups}
-            for block in blocks_in_group(group)
+            for block in blocks_in_element(group)
         }
         # List groups that are present in exclusion groups
         groups_in_exclusion_groups = {
@@ -505,7 +509,7 @@ class Generator:
     def sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
         return min(
             self.blocks_order[f"[{Block.__namespace__}.{block.name}]"]
-            for block in blocks_in_group(element)
+            for block in blocks_in_element(element)
         )
 
     def generate_random_prompts(self, n: int) -> list[str]:
@@ -530,5 +534,29 @@ class Generator:
         return prompts
 
     def generate_exhaustive_prompts(self) -> list[str]:
-        # TODO
-        raise NotImplementedError("mode `exhaustive` is not yet implemented")
+        # First step: create all the lines, that is,
+        # lists of blocks that will generate prompts
+        lines: list[list[Block]] = [[]]
+        for element in self.elements:
+            if isinstance(element, Block):
+                for line in lines:
+                    line.append(element)
+            elif isinstance(element, ExclusionGroup):
+                new_lines = []
+                for member in element.members:
+                    alternative_lines = lines.copy()
+                    for line in alternative_lines:
+                        line.extend(blocks_in_element(member))
+                    new_lines.extend(alternative_lines)
+                lines = new_lines
+
+        # Second step: create the prompts
+        prompts: list[str] = []
+        for blocks in lines:
+            prompt_parts: list[list[str]] = []
+            for block in sorted(blocks, key=self.sort_elements):
+                prompt_parts.append(block.generate_all_keywords())
+            line_prompts = product(*prompt_parts)
+            prompts.extend(map(lambda prompt_parts: ", ".join(prompt_parts), line_prompts))
+
+        return prompts

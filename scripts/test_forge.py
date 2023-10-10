@@ -7,7 +7,7 @@ from prompt_forge import Generator, Candidate
 
 def test_config_parsing():
     # Test that provided example config is valid
-    Generator.from_file(Path(__file__).parent.parent / "example-config.toml")
+    Generator.from_file(Path(__file__).parent.parent / "example-config.toml").generate_exhaustive_prompts()
 
     with pytest.raises(jsonschema.exceptions.ValidationError, match="required property"):
         # Empty config
@@ -32,3 +32,14 @@ def test_parse_candidate():
         # Dump the weights, we'll test that in another unit
         keywords, _ = zip(*Candidate.parse(candidate).expand(weighting="keyword"))
         assert keywords == expected_keywords
+
+
+def test_exhaustive():
+    prompts = Generator.from_string(
+        "[blocks.test]\n"
+        "candidates = [\n"
+        "  \"[[A | B] | [C | D]] E | F\",\n"
+        "  \"G | H\",\n"
+        "]\n"
+    ).generate_exhaustive_prompts()
+    assert prompts == ['A E', 'B E', 'C E', 'D E', 'F', 'G', 'H']
