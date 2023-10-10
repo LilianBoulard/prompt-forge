@@ -12,6 +12,7 @@ If you like the project, :star: it on Github, and share it to your SD friends!
 - [Stable Diffusion prompt forge](#stable-diffusion-prompt-forge)
   - [Install](#install)
     - [AUTOMATIC1111 stable diffusion webui](#automatic1111-stable-diffusion-webui)
+    - [Standalone](#standalone)
   - [Demo](#demo)
   - [The configuration file](#the-configuration-file)
     - [Basic usage](#basic-usage)
@@ -31,6 +32,15 @@ If you like the project, :star: it on Github, and share it to your SD friends!
 ### AUTOMATIC1111 stable diffusion webui
 
 Like for any other AUTOMATIC1111 webui extension, go to the `Extension` tab, then into `Install from URL`, and paste this repo's URL (https://github.com/LilianBoulard/prompt-forge). Finally, click `Install`, reload the UI and you're ready to roll!
+
+### Standalone
+
+A standalone script `prompt-forge-standalone.py` is provided so the system can be run via a command-line interface.
+To use it, you'll need to install Python and the following packages:
+- `toml` if using Python<=10
+- `jsonschema`
+
+Once that's done, run `python prompt-forge-standalone.py -h` for a description of the options.
 
 <hr>
 

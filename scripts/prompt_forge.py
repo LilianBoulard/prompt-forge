@@ -506,7 +506,7 @@ class Generator:
 
         return cls(elements, blocks_order)
 
-    def sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
+    def _sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
         return min(
             self.blocks_order[f"[{Block.__namespace__}.{block.name}]"]
             for block in blocks_in_element(element)
@@ -526,7 +526,7 @@ class Generator:
                     stack.extend(element.members)
                 elif isinstance(element, ExclusionGroup):
                     stack.append(element.choose_member())
-            for block in sorted(activated_blocks, key=self.sort_elements):
+            for block in sorted(activated_blocks, key=self._sort_elements):
                 keyword = block.generate_keyword()
                 if keyword:  # Ignore empty keywords
                     prompt.append(keyword)
@@ -554,7 +554,7 @@ class Generator:
         prompts: list[str] = []
         for blocks in lines:
             prompt_parts: list[list[str]] = []
-            for block in sorted(blocks, key=self.sort_elements):
+            for block in sorted(blocks, key=self._sort_elements):
                 prompt_parts.append(block.generate_all_keywords())
             line_prompts = product(*prompt_parts)
             prompts.extend(map(lambda prompt_parts: ", ".join(prompt_parts), line_prompts))
