@@ -430,7 +430,7 @@ class Block:
         chosen_candidates: list[list[tuple[str, int]]]
 
         if self.weighting in {"candidate-shallow", "candidate-deep"}:
-            chosen_candidates = random.choices(self.candidates, k=k)
+            chosen_candidates = random.sample(self.candidates, k=k)
             return self.separator.join([
                 random.choices(*zip(*candidate))[0]
                 for candidate in chosen_candidates
@@ -438,6 +438,7 @@ class Block:
 
         elif self.weighting == "keyword":
             candidate_weights = [len(candidate) for candidate in self.candidates]
+            # FIXME choices without replacement
             chosen_candidates = random.choices(self.candidates, weights=candidate_weights, k=k)
 
     def generate_all_keywords(self) -> list[str]:
