@@ -576,9 +576,8 @@ class Generator:
             for category, blocks in self._divide_by_type(activated_blocks):
                 keywords = []
                 for block in sorted(blocks, key=self._block_order):
-                    keyword = block.generate_keyword()
-                    if keyword:  # Ignore empty keywords
-                        prompt.append(keyword)
+                    if keyword := block.generate_keyword():  # Ignore empty keywords
+                        keywords.append(keyword)
                 if keywords:
                     prompt.append(f"--{category} " + ", ".join(keywords))
             prompts.append(" ".join(prompt))
