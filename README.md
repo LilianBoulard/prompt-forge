@@ -112,7 +112,6 @@ Both of those can be nested without restriction (e.g., `(1970 | 1980 | 1990) [((
 
 A wide range of parameters can be set via the configuration file. Blocks are defined as `blocks.<block-type>.<block-name>`. Here's an exhaustive list of supported values:
 
-- `sd_model` - string
 - `outpath_samples` - string
 - `outpath_grids` - string
 - `prompt_for_display` - string
