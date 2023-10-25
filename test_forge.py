@@ -5,6 +5,7 @@ import pytest
 from scripts.prompt_forge import Generator, Candidate
 
 
+@pytest.mark.skipif(not (Path(__file__).parent / "scripts" / "config-schema.json").is_file(), reason="No schema file found")
 def test_config_parsing():
     # Test that provided example config is valid
     Generator.from_file(Path(__file__).parent / "example-config.toml").generate_exhaustive_prompts()
