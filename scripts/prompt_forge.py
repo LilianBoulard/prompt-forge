@@ -445,7 +445,6 @@ class Generator:
     def from_string(cls, configuration: str) -> Generator:
         # Parse the config
         config = tomllib.loads(configuration)
-        print(json.dumps(config))
 
         # Validate the JSON schema
         schema_file = Path(__file__).parent / "config-schema.json"
