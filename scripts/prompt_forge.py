@@ -26,6 +26,33 @@ else:
     import tomllib
 
 
+attribute_type_map = {
+    "outpath_samples": str,
+    "outpath_grids": str,
+    "prompt_for_display": str,
+    "prompt": str,
+    "negative_prompt": str,
+    "styles": str,
+    "seed": int,
+    "subseed_strength": float,
+    "subseed": int,
+    "seed_resize_from_h": int,
+    "seed_resize_from_w": int,
+    "sampler_index": int,
+    "sampler_name": str,
+    "batch_size": int,
+    "n_iter": int,
+    "steps": int,
+    "cfg_scale": float,
+    "width": int,
+    "height": int,
+    "restore_faces": bool,
+    "tiling": bool,
+    "do_not_save_samples": bool,
+    "do_not_save_grid": bool,
+}
+
+
 def is_balanced(parens: str) -> bool:
     # From: https://stackoverflow.com/a/73341167/
     parens_map ={"(":")","{":"}","[":"]"}

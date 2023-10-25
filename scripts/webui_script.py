@@ -16,7 +16,7 @@ from modules import errors
 from modules.processing import (Processed, StableDiffusionProcessing,
                                 process_images)
 from modules.shared import state
-from scripts.prompt_forge import Generator
+from scripts.prompt_forge import Generator, attribute_type_map
 from scripts.prompts_from_file import cmdargs
 
 
@@ -192,7 +192,8 @@ class Script(scripts.Script):
 
             copy_p = copy.copy(p)
             for k, v in args.items():
-                setattr(copy_p, k, v)
+                cast = attribute_type_map[k]
+                setattr(copy_p, k, cast(v))
 
             proc = process_images(copy_p)
             images += proc.images
