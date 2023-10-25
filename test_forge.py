@@ -16,8 +16,8 @@ def test_config_parsing():
         Generator.from_string("Invalid configuration")
         Generator.from_string('{"props": [1, 2, 3]}')
         # Malformed config
-        Generator.from_string('[bloks.invalid]\ncandidates=[]')  # No `blocks`, but something else
-        Generator.from_string('[blocks.test]')  # No candidates in block
+        Generator.from_string('[bloks.prompt.invalid]\ncandidates=[""]')  # No `blocks`, but something else
+        Generator.from_string("[blocks.sd_model.test]")  # No candidates in block
 
 
 def test_parse_candidate():
@@ -36,10 +36,15 @@ def test_parse_candidate():
 
 def test_exhaustive():
     prompts = Generator.from_string(
-        "[blocks.test]\n"
+        "[blocks.prompt.test]\n"
         "candidates = [\n"
         "  \"[[A | B] | [C | D]] E | F\",\n"
         "  \"G | H\",\n"
         "]\n"
     ).generate_exhaustive_prompts()
+    # For simplicity, remove the prefix (`--prompt`)
+    prompts = [
+        prompt[len("--prompt "):]
+        for prompt in prompts
+    ]
     assert prompts == ['A E', 'B E', 'C E', 'D E', 'F', 'G', 'H']

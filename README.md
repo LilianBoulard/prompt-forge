@@ -18,6 +18,7 @@ If you like the project, :star: it on Github, and share it to your SD friends!
     - [Basic usage](#basic-usage)
     - [Advanced usage](#advanced-usage)
       - [Candidates syntax](#candidates-syntax)
+      - [Block types](#block-types)
       - [Blocks parameters](#blocks-parameters)
       - [Groups and exclusions](#groups-and-exclusions)
       - [Weighting](#weighting)
@@ -62,23 +63,23 @@ Here's a simple block:
 
 ```toml
 # Here, "my-first-block" is an arbitrary name
-[blocks.my-first-block]
+[blocks.prompt.my-first-block]
 candidates = [
     ...
 ]
 ```
 
-Notice our block named `my-first-block` is defined within the namespace `blocks`. This is mandatory!
+Notice our block is located in the namespace `blocks`. `prompt` means the candidates will contribute to the prompt. `my-first-block` is the name of the prompt block.
 Let's continue with a concrete example of the system in action. Given the following config (saved in `config.toml`):
 
 ```toml
-[blocks.scene]
+[blocks.prompt.scene]
 candidates = [
     "dancing folks",
     "people having lunch",
 ]
 
-[blocks.place]
+[blocks.prompt.place]
 candidates = ["on a plaza"]
 ```
 
@@ -107,6 +108,42 @@ The **candidate system** provides an intuitive way of simplifying writing keywor
 
 Both of those can be nested without restriction (e.g., `(1970 | 1980 | 1990) [((pristine) red) Ford Mustang | (sports) Porsche 911]`).
 
+#### Block types
+
+A wide range of parameters can be set via the configuration file. Blocks are defined as `blocks.<block-type>.<block-name>`. Here's an exhaustive list of supported values:
+
+- `sd_model` - string
+- `outpath_samples` - string
+- `outpath_grids` - string
+- `prompt_for_display` - string
+- `prompt` - string
+- `negative_prompt` - string
+- `styles` - string
+- `seed` - int
+- `subseed_strength` - float
+- `subseed` - int
+- `seed_resize_from_h` - int
+- `seed_resize_from_w` - int
+- `sampler_index` - int
+- `sampler_name` - string
+- `batch_size` - int
+- `n_iter` - int
+- `steps` - int
+- `cfg_scale` - float
+- `width` - int
+- `height` - int
+- `restore_faces` - boolean
+- `tiling` - boolean
+- `do_not_save_samples` - boolean
+- `do_not_save_grid` - boolean
+
+Note: the type indicated refers to the candidates' type within the block. Although they should have the format of their type, values should be specified as strings.
+For example:
+
+- `int`: `["1", "2", "55"]`
+- `float`: `["6.2", "0.1", "9.4"]`
+- `boolean`: `["true", "false"]`
+
 #### Blocks parameters
 
 Blocks support the following parameters for customizing their behavior:
@@ -128,16 +165,16 @@ Groups, on the other hand, are sets of blocks "bundled" together. They are espec
 For example:
 
 ```toml
-[blocks.clothing-shoes]
+[blocks.prompt.clothing-shoes]
 candidates = ["heels", "moccasin"]
 
-[blocks.clothing-top]
+[blocks.prompt.clothing-top]
 candidates = ["simple shirt", "vest"]
 
-[blocks.clothing-bottom]
+[blocks.prompt.clothing-bottom]
 candidates = ["trousers", "jeans"]
 
-[blocks.clothing-ensemble]
+[blocks.prompt.clothing-ensemble]
 candidates = ["jumpsuit", "dress"]
 
 # Ensembles are incompatible with top and bottom clothes:
@@ -145,16 +182,16 @@ candidates = ["jumpsuit", "dress"]
 
 # Here, "clothing" is an arbitrary name
 [groups.clothing]
-members = ["blocks.clothing-bottom", "blocks.clothing-top"]
+members = ["blocks.prompt.clothing-bottom", "blocks.prompt.clothing-top"]
 
 # So is "clothing" here
 [exclusions.clothing]
-members = ["blocks.clothing-ensemble", "groups.clothing"]
+members = ["blocks.prompt.clothing-ensemble", "groups.clothing"]
 ```
 
 With this setup in place, it is not possible to get the prompt `heels, vest, jeans, dress`.
 
-Also, note that the groups' position within the configuration file is unimportant.
+As with all blocks not defined within the namespace `blocks`, their position within the configuration file is unimportant.
 
 #### Weighting
 
@@ -170,7 +207,7 @@ Blocks support the parameter `weighting`, for which there are three possible val
 For example, with this configuration block:
 
 ```toml
-[blocks.example]
+[blocks.prompt.example]
 weighting = "..."
 candidates = [
     "[[large | small] | beautiful] car",

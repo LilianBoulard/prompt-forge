@@ -1,21 +1,27 @@
-[blocks.base]
+[blocks.width.wallpaper]
+candidates = ["768"]
+
+[blocks.height.wallpaper]
+candidates = ["432"]
+
+[blocks.prompt.base]
 candidates = [
     "Ford Mustang",
     "Porsche 911",
 ]
 
-[blocks.model]
+[blocks.prompt.model]
 candidates = [
     "[1970 | 1980 | 1990 | 2000 | 2010 | 2020] model",
 ]
 
-[blocks.color]
+[blocks.prompt.color]
 weighting = "keyword"
 candidates = [
     "[blue | red | mustard] paint job",
 ]
 
-[blocks.scene]
+[blocks.prompt.scene]
 candidates = [
     "on the (busy) highway",
     "in the desert",
@@ -23,7 +29,7 @@ candidates = [
     "in the streets of [Paris | New York]",
 ]
 
-[blocks.lightning]
+[blocks.prompt.lightning]
 optional = true
 weighting = "keyword"
 candidates = [
@@ -32,7 +38,7 @@ candidates = [
     "moonlight:0.8",
 ]
 
-[blocks.image-details]
+[blocks.prompt.image-details]
 candidates = [
     "realistic",
     "highly detailed",
@@ -40,7 +46,7 @@ candidates = [
     "masterpiece",
 ]
 
-[blocks.camera-view]
+[blocks.prompt.camera-view]
 optional = true
 weighting = "keyword"
 candidates = [

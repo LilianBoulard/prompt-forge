@@ -13,6 +13,7 @@ import json
 import random
 import re
 import sys
+from collections import defaultdict
 from itertools import product
 from pathlib import Path
 from typing import Literal
@@ -44,7 +45,7 @@ def blocks_in_element(element: Block | Group | ExclusionGroup) -> set[Block]:
 
     Parameters
     ----------
-    element: Block, Group or ExclusionGroup
+    element : Block, Group or ExclusionGroup
         Element to flatten.
 
     Returns
@@ -103,7 +104,7 @@ class Candidate:
 
         Parameters
         ----------
-        candidate: str
+        candidate : str
             The candidate keyword.
 
         Returns
@@ -202,7 +203,7 @@ class Candidate:
 
         Parameters
         ----------
-        weighting: {"candidate-shallow", "candidate-deep", "keyword"}
+        weighting : {"candidate-shallow", "candidate-deep", "keyword"}
             Weighting system to use for this candidate (inherited from the block).
             Refer to the README for more information.
 
@@ -275,22 +276,27 @@ class Group:
 
     __namespace__ = "groups"
 
-    def __init__(self, name: str, members: list[Block]):
+    def __init__(self, name: str, members: list[Block]) -> Group:
         self.name = name
         self.members = members
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
     
-    def __repr__(self):
-        return f"Group {self.name!r} with {len(self.members)} members"
+    def __repr__(self) -> str:
+        return f"Group {self.fqn!r} <{len(self.members)} members>"
+
+    @property
+    def fqn(self) -> str:
+        """Fully qualified name"""
+        return f"{self.__namespace__}.{self.name}"
 
 
 class ExclusionGroup:
 
     __namespace__ = "exclusions"
 
-    def __init__(self, name: str, members: list[Block | Group], weights: list[int] | None):
+    def __init__(self, name: str, members: list[Block | Group], weights: list[int] | None) -> ExclusionGroup:
         self.name = name
         self.members = members
         self.weights = weights
@@ -298,11 +304,16 @@ class ExclusionGroup:
     def choose_member(self) -> Block | Group:
         return random.choices(self.members, weights=self.weights)[0]
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
     
-    def __repr__(self):
-        return f"ExclusionGroup {self.name!r} with {len(self.members)} members"
+    def __repr__(self) -> str:
+        return f"ExclusionGroup {self.fqn!r} <{len(self.members)} members>"
+
+    @property
+    def fqn(self) -> str:
+        """Fully qualified name"""
+        return f"{self.__namespace__}.{self.name}"
 
 
 class Block:
@@ -312,25 +323,29 @@ class Block:
 
     Parameters
     ----------
-    name: str
+    name : str
         Name of the block.
-    candidates: list of str
+    type : str
+        Block type.
+    candidates : list of str
         Candidates (can contain square brackets and parentheses).
-    parameters: mapping of str to str or bool
+    parameters : mapping of str to str or bool
         Parameters passed in the config.
 
     Attributes
     ----------
-    name: str
+    name : str
         Name of the block
-    num: range
+    type : str
+        Block type
+    num : range
         Possible number of keywords to pick.
-    separator: str
+    separator : str
         When picking multiple keywords from this block,
         the separator to use when joining them.
-    candidates: list of list of 2-tuples of str and int
+    candidates : list of list of 2-tuples of str and int
         The keywords for each candidate.
-    weighting: {"candidate-shallow", "candidate-deep", "keyword"}
+    weighting : {"candidate-shallow", "candidate-deep", "keyword"}
         How to tune probabilities when picking a keyword.
         Refer to the guide, section "Weighting" for more information.
     """
@@ -338,13 +353,15 @@ class Block:
     __namespace__ = "blocks"
 
     name: str
+    type: str
     num: range
     separator: str
     candidates: list[list[tuple[str, int]]]
     weighting: Literal["candidate-shallow", "candidate-deep", "keyword"]
 
-    def __init__(self, name: str, candidates: list[str], parameters: dict[str, any]) -> Block:
+    def __init__(self, name: str, type: str, candidates: list[str], parameters: dict[str, any]) -> Block:
         self.name = name
+        self.type = type
 
         self.weighting = parameters.get("weighting", "candidate-deep")
         assert self.weighting in {"candidate-shallow", "candidate-deep", "keyword"}
@@ -366,15 +383,20 @@ class Block:
 
         self.separator = parameters.get("separator", ", ")
 
-    def __hash__(self):
-        return hash(self.name)
+    def __hash__(self) -> int:
+        return hash(self.fqn)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
-            f"Block {self.name!r} "
+            f"Block {self.fqn!r} "
             f"<{len(self.candidates)} candidates, "
             f"{sum(len(keywords) for keywords in self.candidates)} keywords>"
         )
+
+    @property
+    def fqn(self) -> str:
+        """Fully qualified name"""
+        return f"{self.__namespace__}.{self.type}.{self.name}"
 
     def generate_keyword(self) -> str:
         k = min(random.choice(self.num), len(self.candidates))
@@ -423,14 +445,7 @@ class Generator:
     def from_string(cls, configuration: str) -> Generator:
         # Parse the config
         config = tomllib.loads(configuration)
-
-        # Since toml returns the config as an unordered JSON document,
-        # we read the configuration to find the order of the blocks
-        pattern = re.compile(r"\[" + Block.__namespace__ + r"\.(.+?)\]")
-        blocks_order: dict[str, int] = {
-            match.group(0): match.start()
-            for match in pattern.finditer(configuration)
-        }
+        print(json.dumps(config))
 
         # Validate the JSON schema
         schema_file = Path(__file__).parent / "config-schema.json"
@@ -442,14 +457,25 @@ class Generator:
             print(
                 f"Did not find schema at {schema_file!s} "
                 f"to validate the configuration against. "
+                f"There might be unexpected/weird errors "
+                f"during execution. "
             )
+
+        # Since toml returns the config as an unordered JSON document,
+        # we read the configuration to find the order of the blocks
+        pattern = re.compile(r"\[" + Block.__namespace__ + r"\.(.+?)\]")
+        blocks_order: dict[str, int] = {
+            match.group(0): match.start()
+            for match in pattern.finditer(configuration)
+        }
 
         # Create the blocks
         blocks = {
-            Block(name, block.get("candidates", list()), block)
-            for name, block in config.get(Block.__namespace__, {}).items()
+            Block(block_name, category, block_info.get("candidates", list()), block_info)
+            for category, contained_blocks in config.get(Block.__namespace__, dict()).items()
+            for block_name, block_info in contained_blocks.items()
         }
-        mappings = {f"{Block.__namespace__}.{block.name}": block for block in blocks}
+        mappings = {block.fqn: block for block in blocks}
 
         # Create the groups
         groups = [
@@ -460,9 +486,9 @@ class Generator:
                     for group_name in group.get("members", list())
                 ],
             )
-            for name, group in config.get(Group.__namespace__, {}).items()
+            for name, group in config.get(Group.__namespace__, dict()).items()
         ]
-        mappings.update({f"{Group.__namespace__}.{group.name}": group for group in groups})
+        mappings.update({group.fqn: group for group in groups})
 
         # Create the exclusion groups
         exclusion_groups = [
@@ -506,17 +532,39 @@ class Generator:
 
         return cls(elements, blocks_order)
 
-    def _sort_elements(self, element: Block | Group | ExclusionGroup) -> int:
-        return min(
-            self.blocks_order[f"[{Block.__namespace__}.{block.name}]"]
-            for block in blocks_in_element(element)
-        )
+    def _divide_by_type(self, blocks: list[Block]) -> list[tuple[str, list[Block]]]:
+        """
+        Takes a list of blocks, and returns them categorized by type.
+        """
+        divided_blocks = defaultdict(list)
+        for block in blocks:
+            divided_blocks[block.type].append(block)
+        return list(divided_blocks.items())
+
+    def _block_order(self, block: Block) -> int:
+        """
+        Returns an index that can be used for sorting blocks.
+        """
+        return self.blocks_order[f"[{block.fqn}]"]
 
     def generate_random_prompts(self, n: int) -> list[str]:
+        """
+        Generate `n` random prompts.
+
+        Parameters
+        ----------
+        n : int
+            Number of random prompts to generate.
+
+        Returns
+        -------
+        list of str
+            The random prompts. There can be duplicate prompts.
+        """
         prompts = []
         for _ in range(n):
             prompt = []
-            activated_blocks = []
+            activated_blocks: list[Block] = []
             stack = [*self.elements]
             while stack:
                 element = stack.pop()
@@ -526,14 +574,27 @@ class Generator:
                     stack.extend(element.members)
                 elif isinstance(element, ExclusionGroup):
                     stack.append(element.choose_member())
-            for block in sorted(activated_blocks, key=self._sort_elements):
-                keyword = block.generate_keyword()
-                if keyword:  # Ignore empty keywords
-                    prompt.append(keyword)
-            prompts.append(", ".join(prompt))
+            for category, blocks in self._divide_by_type(activated_blocks):
+                keywords = []
+                for block in sorted(blocks, key=self._block_order):
+                    keyword = block.generate_keyword()
+                    if keyword:  # Ignore empty keywords
+                        prompt.append(keyword)
+                if keywords:
+                    prompt.append(f"--{category} " + ", ".join(keywords))
+            prompts.append(" ".join(prompt))
         return prompts
 
     def generate_exhaustive_prompts(self) -> list[str]:
+        """
+        Generates all possible prompts.
+
+        Returns
+        -------
+        list of str
+            Generated prompts. There are no duplicates,
+            but the list can be very long.
+        """
         # First step: create all the lines, that is,
         # lists of blocks that will generate prompts
         lines: list[list[Block]] = [[]]
@@ -552,11 +613,19 @@ class Generator:
 
         # Second step: create the prompts
         prompts: list[str] = []
-        for blocks in lines:
+        for line in lines:
             prompt_parts: list[list[str]] = []
-            for block in sorted(blocks, key=self._sort_elements):
-                prompt_parts.append(block.generate_all_keywords())
-            line_prompts = product(*prompt_parts)
-            prompts.extend(map(lambda prompt_parts: ", ".join(prompt_parts), line_prompts))
+            for category, blocks in self._divide_by_type(line):
+                keywords: list[list[str]] = []
+                for block in sorted(blocks, key=self._block_order):
+                    keywords.append(block.generate_all_keywords())
+                category_prompts = [
+                    f"--{category} " + ", ".join(sub_prompt_parts)
+                    for sub_prompt_parts in product(*keywords)
+                ]
+                prompt_parts.append(category_prompts)
+
+            line_prompts: list[list[str]] = product(*prompt_parts)
+            prompts.extend(map(lambda prompt_parts: " ".join(prompt_parts), line_prompts))
 
         return prompts
